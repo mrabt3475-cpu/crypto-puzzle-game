@@ -1,0 +1,1 @@
+#public/rutes/payment.js
