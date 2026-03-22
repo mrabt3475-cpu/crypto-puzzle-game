@@ -1,1 +1,16 @@
-ewogICJuYW1lIjogImNyeXB0by1wdXp6bGUtZ2FtZSIsCiAgInZlcnNpb24iOiAiMS4wLjAiLAogICJtYWluIjogInNlcnZlci5qcyIsCiAgInNjcmlwdHMiOiB7CiAgICAic3RhcnQiOiAibm9kZSBzZXJ2ZXIuanMiCiAgfSwKICAiZGVwZW5kZW5jaWVzIjogewogICAgImV4cHJlc3MiOiAiXjQuMTguMiIsCiAgICAibW9uZ29vc2UiOiAiXjguMC4wIiwKICAgICJqc29ud2Vi.dG9rZW4iOiAiXjkuMC4yIiwKICAgICJheGlvcyI6ICJeMS42LjAiLAogICAgImRvdGVudiI6ICJeMTYuMy4xIiwKICAgICJjb3JzIjogXjIuOC41CiAgfQp9
+{
+  "name": "crypto-puzzle-game",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "jsonweb.token": "^10.0.0",
+    "bin: "^1.2.0",
+    "binance-api-node": "^3.1.0",
+    "csr": "^3.1.0"
+  }
+}
