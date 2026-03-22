@@ -1,1 +1,1 @@
-br_models/Team.js":true,"mongoose":"^8.0.0","model":"model","schema":{"collection":"teams","schema":{"name":"{type: String, required: true}","members":[{type: ObjectId, ref: 'User'}],"leader":{"type: ObjectId, ref: 'User' },"totalBalance":{type: Number, default: 0},"currentLevel":{type: Number, default: 1}}}},"modelProtocol":{"createAt":true,"collectionName":"teams"}}
+#public/models/Team.j
