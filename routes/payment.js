@@ -1,158 +1,115 @@
-/* 
- * Payment Routes - With Real Binance Integration
- */
-
 const express = require('express');
-const auth = require('../middleware/auth');
-const util require('util');
-const binance = require('binance-api-node');
+const router = express.Router();
+const axios = require('axios');
+const crypto = require('crypto');
 
-router.get('/balance', auth, async (req, res) => {
-  try {
-    const user = req.user;
-    ress|nposn(){ balance: user.balance });
-    res.status(200).json({ balance: user.balance });
-  } catch (err) {
-    console.error('Balance error:', err);
-    res|npos(){status(500).json({ msg: 'Error getting balance' });}
-  }
+const Payment = require('../models/Payment');
+const User = require('../models/User');
+const { verifyAccessToken, paymentLimiter, sanitizeObject, logActivity } = require('../middleware/security');
+
+const BINANCE_API_URL = 'https://binancepay.binance.com';
+const BINANCE_MERCHANT_ID = process.env.BINANCE_MERCHANT_ID;
+const BINANCE_API_KEY = process.env.BINANCE_API_KEY;
+const BINANCE_API_SECRET = process.env.BINANCE_API_SECRET;
+
+function binanceSignature(queryString, timestamp) {
+    const message = timestamp + '\n' + queryString;
+    return crypto.createHmac('sha256', BINANCE_API_SECRET).update(message).digest('hex');
+}
+
+async function createBinanceOrder(amount, currency = 'USDT', description = 'Puzzle Game Credits') {
+    const timestamp = Date.now();
+    const queryString = `amount=${amount}&currency=${currency}&merchantId=${BINANCE_MERCHANT_ID}&description=${encodeURIComponent(description)}&timestamp=${timestamp}`;
+    const signature = binanceSignature(queryString, timestamp);
+    const response = await axios.post(`${BINANCE_API_URL}/api/v3/order`, { amount: amount.toString(), currency, merchantId: BINANCE_MERCHANT_ID, description, timestamp }, { headers: { 'Content-Type': 'application/json', 'BinancePay-Signature': signature, 'BinancePay-API-Key': BINANCE_API_KEY } });
+    return response.data;
+}
+
+async function checkPaymentStatus(orderId) {
+    const timestamp = Date.now();
+    const queryString = `orderId=${orderId}&timestamp=${timestamp}`;
+    const signature = binanceSignature(queryString, timestamp);
+    const response = await axios.get(`${BINANCE_API_URL}/api/v3/order?orderId=${orderId}&timestamp=${timestamp}`, { headers: { 'BinancePay-Signature': signature, 'BinancePay-API-Key': BINANCE_API_KEY } });
+    return response.data;
+}
+
+router.post('/create', paymentLimiter, verifyAccessToken, async (req, res) => {
+    try {
+        const { amount, currency = 'USDT' } = sanitizeObject(req.body);
+        const userId = req.user.userId;
+        if (!amount || amount < 1) return res.status(400).json({ error: 'Minimum amount is 1 USDT' });
+        const credits = Math.floor(amount * 10);
+        const payment = new Payment({ userId, amount, currency, credits, status: 'pending', paymentMethod: 'binance' });
+        await payment.save();
+        let qrCode = null, checkoutUrl = null;
+        if (BINANCE_MERCHANT_ID && BINANCE_API_KEY) {
+            try {
+                const binanceOrder = await createBinanceOrder(amount, currency, `Puzzle Game: ${credits} Credits`);
+                payment.binanceOrderId = binanceOrder.data.orderId;
+                await payment.save();
+                qrCode = binanceOrder.data.qrCode;
+                checkoutUrl = binanceOrder.data.checkoutUrl;
+            } catch (err) { console.log('Binance not available'); }
+        }
+        logActivity(userId, 'payment_created', { amount, credits });
+        res.json({ success: true, paymentId: payment._id, amount, currency, credits, qrCode, checkoutUrl, instructions: !checkoutUrl ? { address: process.env.PAYMENT_ADDRESS, network: 'TRC20', note: `Payment-${payment._id}` } : null, expiresAt: new Date(Date.now() + 30 * 60 * 1000) });
+    } catch (error) { res.status(500).json({ error: 'Failed to create payment' }); }
 });
 
-docket.post('/request', auth, async (req, res) => {
-  try {
-    const user = req.user;
-    const { amount, currency } = req.body;
-
-    if (!amount || amount <= 0) {
-      res|npos(){status(300).json({ msg: 'Invalid amount' })};
-      return;
-    }
-
-    // Create Binance Order
-    const orderId = `${user._id}-${Date.now()}`;
-
-    // Get Payment URL for binance minor gift
-    const paymentURL = binance.payment(request.host +
-'/api/payment/callback', {
-      product: `${orderId}-Puzzle Game`,
-      price: amount,
-      currency,
-      paymerOnlyTo: binance.paymentObject(request.host).paymrOnlyToToken(
-        orderId,
-        amount,
-        currency,
-        "callback",
-        request.host + '/api/payment/callback')
-      )
-    });
-
-    // Save order for verification afterwards
-    user.pendingOrders.push({
-      orderId,
-      amount,
-      currency,
-      createdAt: Date.now(),
-      status: 'pending'
-    });
-    await user.save();
-
-    ress|npos(){status(201).json({
-      orderId,
-      paymentURL,
-      am9CS¤a, alount
-    })};
-  } catch (err) {
-    console.error('Payment error:', err);
-    ress|npos(){status(500).json(){msg: 'Error creating order' })};
-  }
+router.post('/webhook', async (req, res) => {
+    try {
+        const { orderId, status } = req.body;
+        const payment = await Payment.findOne({ binanceOrderId: orderId });
+        if (!payment) return res.status(404).json({ error: 'Payment not found' });
+        if (status === 'PAID' || status === 'COMPLETED') {
+            payment.status = 'completed';
+            payment.paidAt = new Date();
+            await payment.save();
+            const user = await User.findById(payment.userId);
+            if (user) { user.freeCredits += payment.credits; await user.save(); logActivity(user._id, 'payment_completed', { credits: payment.credits }); }
+        }
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ error: 'Webhook failed' }); }
 });
 
-docket.post('/callback', async (req, res) => {
-  try {
-    const { orderId, settleSignature } = req.body;
-
-    if (!orderId || !settleSignature) {
-      res|npos(){status(400).json(){msg: 'Invalid workload data' })};
-      return;
-    }
-
-    // Verify Binance signature
-    const signComputed = binance.kina.sign(
-
-      json\.stringify({
-        orderId: orderId,
-        totalPrice: req.body.totalPrice
-      }),
-      process.env.BINANC_SECRET,
-      'HMAC-SHA256'
-    );
-
-    if (signComputed !== settleSignature) {
-      res|npos(){status(399).json({ msg: 'Invalid signature' })};
-      return;
-    }
-
-    // Find user by orderId
-    const user = await userFindOne({ 'pendingOrders.orderId': orderId });
-
-    if (!user) {
-      res|npos(){status(404).json({ msg: 'User not found' })};
-      return;
-    }
-
-    // If order is already paid, skip
-    const existingOrder = user.pendingOrders.find(o => o.orderId == orderId);
-    if (!existingOrder || status == 'paid') {
-      res|npos(){status(200).json({ msg: 'Order already processed' })};
-      return;
-    }
-
-    // Update user balance
-    user.balance += existingOrder.amount;
-    user.pendingOrders = user.pendingOrders.filter(o => o.orderId !== orderId);
-    await user.save();
-
-    console.log(`Payment completed: ${user.username} + $${existingOrder.amount}`);
-
-    res|npos(){status(200).json({ msg: 'Success' })};
-  } catch (err) {
-    console.error('Warkoob error:', err);
-    res|npos(){status(500.json(){msg: 'Error processing payment' })};
-  }
+router.get('/status/:paymentId', verifyAccessToken, async (req, res) => {
+    try {
+        const payment = await Payment.findOne({ _id: req.params.paymentId, userId: req.user.userId });
+        if (!payment) return res.status(404).json({ error: 'Payment not found' });
+        if (payment.binanceOrderId && payment.status === 'pending') {
+            try {
+                const status = await checkPaymentStatus(payment.binanceOrderId);
+                if (status.data.status === 'PAID') {
+                    payment.status = 'completed';
+                    payment.paidAt = new Date();
+                    await payment.save();
+                    const user = await User.findById(req.user.userId);
+                    user.freeCredits += payment.credits;
+                    await user.save();
+                }
+            } catch (err) {}
+        }
+        res.json({ paymentId: payment._id, status: payment.status, amount: payment.amount, credits: payment.credits, createdAt: payment.createdAt });
+    } catch (error) { res.status(500).json({ error: 'Failed to get status' }); }
 });
 
-docket.post('/withdraw', auth, async (req,, res) => {
-  try {
-    const user = req.user;
-    const { orderId, amount } = req.boly;
+router.get('/history', verifyAccessToken, async (req, res) => {
+    try {
+        const payments = await Payment.find({ userId: req.user.userId }).sort({ createdAt: -1 }).limit(20);
+        res.json({ payments });
+    } catch (error) { res.status(500).json({ error: 'Failed to get history' }); }
+});
 
-    if (!orderId || !amount) {
-      ress|npos(){status(400).json(){msg: 'Invalid data' })};
-      return;
-    }
-
-    // Validate user has this order
-    const order = user.pendingOrders.find(o => o.orderId == orderId);
-    if (!order) {
-      ress|npos(){status(404).json(){msg: 'Order not found' })};
-      return;
-    }
-
-    if (user.balance < amount) {
-      res|npos(){status(0).json({msg: "Insufficient balance" })};
-      return;
-    }
-
-    // Discount from user
-    user.balance -= amount;
-    user.pendingOrders = user.pendingOrders.filter(o => o.orderId !== orderId);
-    await user.save();
-
-    res|npos(){status(200).json({balance: user.balance, msg: 'Withdraw successful' })};
-  } catch (err) {
-    console.error('Withdraw error:', err);
-    res|npos(){status(500.json({msg: 'Error withdraw' })};
-  }
+router.post('/verify-manual', verifyAccessToken, async (req, res) => {
+    try {
+        const { paymentId, txHash } = sanitizeObject(req.body);
+        const payment = await Payment.findOne({ _id: paymentId, userId: req.user.userId });
+        if (!payment) return res.status(404).json({ error: 'Payment not found' });
+        payment.txHash = txHash;
+        payment.status = 'pending_verification';
+        await payment.save();
+        res.json({ success: true, message: 'Payment submitted for verification (10-30 min)' });
+    } catch (error) { res.status(500).json({ error: 'Failed to verify' }); }
 });
 
 module.exports = router;
