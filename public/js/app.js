@@ -1,7 +1,12 @@
-// ========================================
-// Crypto Puzzle Game - JavaScript
-// ========================================
+/**
+ * ========================================
+ * Crypto Puzzle Game - JavaScript
+ * ========================================
+ */
 
+// ========================================
+// PUZZLES DATA
+// ========================================
 const PUZZLES = [
     { id: 1, type: 'أحجية', question: 'ما هو الرقم الذي يأتي بعد 9 وأقل من 11؟', answer: ['10', 'عشرة'] },
     { id: 2, type: 'أحجية', question: 'ما هو الشهر الذي عدد أيامه 28 يوم؟', answer: ['فبراير', 'شباط', 'February'] },
@@ -25,28 +30,49 @@ const PUZZLES = [
     { id: 20, type: 'أحجية', question: 'ما هو مفتاح النجاح؟', answer: ['العمل', 'الجد', 'effort'] }
 ];
 
+// ========================================
+// GAME CONFIG
+// ========================================
+const CONFIG = {
+    TOTAL_LEVELS: 20,
+    POINTS_PER_PUZZLE: 100,
+    MAX_ATTEMPTS: 3,
+    PRIZE_AMOUNT: 1000,
+    TEAM_MONTHLY_FEE: 5,
+    TEAM_ADD_MEMBER_FEE: 5
+};
+
+// ========================================
+// GAME CLASS
+// ========================================
 class CryptoPuzzleGame {
     constructor() {
+        // Game state
         this.currentLevel = 1;
         this.totalPoints = 0;
-        this.attempts = 3;
+        this.attempts = CONFIG.MAX_ATTEMPTS;
         this.timer = 0;
         this.timerInterval = null;
         this.isLoggedIn = false;
         this.user = null;
+        
+        // Team state
         this.hasTeam = false;
         this.teamCode = null;
         this.teamMember2 = null;
         
+        // Initialize
         this.init();
     }
     
+    // Initialize the game
     init() {
         this.checkAuth();
         this.setupEventListeners();
         this.loadUserData();
     }
     
+    // Check if user is logged in
     checkAuth() {
         const userData = localStorage.getItem('puzzleUser');
         if (userData) {
@@ -56,32 +82,39 @@ class CryptoPuzzleGame {
         }
     }
     
+    // Setup event listeners
     setupEventListeners() {
+        // Auth tabs
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => this.switchAuthTab(btn.dataset.tab));
         });
         
+        // Auth form
         document.getElementById('authForm').addEventListener('submit', (e) => {
             e.preventDefault();
             this.handleAuth();
         });
         
+        // Navigation
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.addEventListener('click', () => this.switchPage(btn.dataset.page));
         });
         
+        // Submit answer
         document.getElementById('submitBtn').addEventListener('click', () => this.submitAnswer());
         document.getElementById('answerInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.submitAnswer();
         });
     }
     
+    // Switch auth tab
     switchAuthTab(tab) {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
         });
     }
     
+    // Handle authentication
     handleAuth() {
         const email = document.getElementById('emailInput').value;
         const password = document.getElementById('passwordInput').value;
@@ -104,6 +137,7 @@ class CryptoPuzzleGame {
         this.showGame();
     }
     
+    // Show game section
     showGame() {
         document.getElementById('authSection').style.display = 'none';
         document.getElementById('gameSection').style.display = 'block';
@@ -112,6 +146,7 @@ class CryptoPuzzleGame {
         this.startTimer();
     }
     
+    // Load current puzzle
     loadPuzzle() {
         const puzzle = PUZZLES.find(p => p.id === this.currentLevel);
         
@@ -129,6 +164,7 @@ class CryptoPuzzleGame {
         this.updateProgress();
     }
     
+    // Submit answer
     submitAnswer() {
         const answer = document.getElementById('answerInput').value.trim().toLowerCase();
         
@@ -141,16 +177,14 @@ class CryptoPuzzleGame {
         const isCorrect = puzzle.answer.some(a => a.toLowerCase() === answer);
         
         if (isCorrect) {
-            const points = this.hasTeam ? 200 : 100;
-            this.totalPoints += points;
+            this.totalPoints += CONFIG.POINTS_PER_PUZZLE;
             this.currentLevel++;
-            this.attempts = 3;
+            this.attempts = CONFIG.MAX_ATTEMPTS;
             
-            this.showToast(`✅ إجابة صحيحة! +${points} نقطة`, 'success');
+            this.showToast(`✅ إجابة صحيحة! +${CONFIG.POINTS_PER_PUZZLE} نقطة`, 'success');
             
-            if (this.currentLevel > 20) {
-                const prize = this.hasTeam ? 2000 : 1000;
-                this.showToast(`🎉 تهانينا! فزت بالجائزة الكبرى! ${prize}$ USDT`, 'success');
+            if (this.currentLevel > CONFIG.TOTAL_LEVELS) {
+                this.showToast(`🎉 تهانينا! فزت بالجائزة الكبرى! ${CONFIG.PRIZE_AMOUNT}$ USDT`, 'success');
             } else {
                 this.loadPuzzle();
             }
@@ -161,7 +195,7 @@ class CryptoPuzzleGame {
             if (this.attempts <= 0) {
                 this.showToast('❌ انتهت المحاولات! جرب المستوى القادم', 'error');
                 this.currentLevel++;
-                this.attempts = 3;
+                this.attempts = CONFIG.MAX_ATTEMPTS;
                 this.loadPuzzle();
             } else {
                 this.showToast('❌ إجابة خاطئة! حاول مجدداً', 'error');
@@ -171,6 +205,7 @@ class CryptoPuzzleGame {
         this.updateProgress();
     }
     
+    // Start timer
     startTimer() {
         if (this.timerInterval) clearInterval(this.timerInterval);
         
@@ -182,6 +217,7 @@ class CryptoPuzzleGame {
         }, 1000);
     }
     
+    // Update progress
     updateProgress() {
         document.getElementById('totalPoints').textContent = this.totalPoints;
         document.getElementById('walletBalance').textContent = this.totalPoints.toFixed(2);
@@ -189,10 +225,11 @@ class CryptoPuzzleGame {
         document.getElementById('statLevels').textContent = this.currentLevel - 1;
         document.getElementById('statTime').textContent = document.getElementById('timer').textContent;
         
-        const progress = (this.currentLevel / 20) * 100;
+        const progress = (this.currentLevel / CONFIG.TOTAL_LEVELS) * 100;
         document.getElementById('progressFill').style.width = `${progress}%`;
     }
     
+    // Switch page
     switchPage(page) {
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.page === page);
@@ -204,6 +241,7 @@ class CryptoPuzzleGame {
         document.getElementById('profileSection').style.display = page === 'profile' ? 'block' : 'none';
     }
     
+    // Load user data
     loadUserData() {
         if (this.user) {
             document.getElementById('balance').textContent = this.user.balance.toFixed(2);
@@ -212,6 +250,7 @@ class CryptoPuzzleGame {
         }
     }
     
+    // Show toast notification
     showToast(message, type = 'info') {
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
@@ -226,6 +265,7 @@ class CryptoPuzzleGame {
         }, 3000);
     }
     
+    // Get toast icon
     getToastIcon(type) {
         const icons = {
             success: 'check-circle',
@@ -237,9 +277,12 @@ class CryptoPuzzleGame {
     }
 }
 
-// Team Functions
+// ========================================
+// TEAM FUNCTIONS
+// ========================================
+
 function createTeam() {
-    game.showToast('جاري إنشاء الفريق مقابل $5...', 'info');
+    game.showToast(`جاري إنشاء الفريق مقابل $${CONFIG.TEAM_MONTHLY_FEE}...`, 'info');
     
     setTimeout(() => {
         game.hasTeam = true;
@@ -249,12 +292,12 @@ function createTeam() {
         document.getElementById('teamActions').style.display = 'block';
         document.getElementById('teamCode').value = game.teamCode;
         
-        game.showToast('✅ تم إنشاء الفريق بنجاح! $5/شهر', 'success');
+        game.showToast(`✅ تم إنشاء الفريق بنجاح! $${CONFIG.TEAM_MONTHLY_FEE}/شهر`, 'success');
     }, 1000);
 }
 
 function addTeamMember() {
-    game.showToast('جاري إضافة العضو مقابل $5...', 'info');
+    game.showToast(`جاري إضافة العضو مقابل $${CONFIG.TEAM_ADD_MEMBER_FEE}...`, 'info');
     
     setTimeout(() => {
         game.teamMember2 = 'صديق';
@@ -264,7 +307,7 @@ function addTeamMember() {
         document.getElementById('member2Card').style.opacity = '1';
         document.getElementById('addMemberSection').style.display = 'none';
         
-        game.showToast('✅ تم إضافة العضو للفريق! +200 نقطة لكل لغز', 'success');
+        game.showToast('✅ تم إضافة العضو للفريق!', 'success');
     }, 1000);
 }
 
@@ -280,4 +323,7 @@ function logout() {
     location.reload();
 }
 
+// ========================================
+// INITIALIZE GAME
+// ========================================
 const game = new CryptoPuzzleGame();
