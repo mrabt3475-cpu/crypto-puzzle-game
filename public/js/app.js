@@ -3,146 +3,26 @@
 // ========================================
 
 const PUZZLES = [
-    {
-        id: 1,
-        type: 'أحجية',
-        question: 'ما هو الرقم الذي يأتي بعد 9 وأقل من 11؟',
-        answer: ['10', 'عشرة'],
-        hint: 'رقم واحد فقط'
-    },
-    {
-        id: 2,
-        type: 'أحجية',
-        question: 'ما هو الشهر الذي عدد أيامه 28 يوم؟',
-        answer: ['فبراير', 'شباط', 'February'],
-        hint: 'الشهر الثاني في السنة'
-    },
-    {
-        id: 3,
-        type: 'أحجية',
-        question: 'ما هو الحيوان الذي يُعرف بملك الغابة؟',
-        answer: ['أسد', 'lion', 'الأسد'],
-        hint: 'يبدأ بحرف الألف'
-    },
-    {
-        id: 4,
-        type: 'أحجية',
-        question: 'كم عدد ألوان قوس قزح الأساسية؟',
-        answer: ['7', 'سبعة', 'seven'],
-        hint: 'عدد أكبر من 5 وأقل من 10'
-    },
-    {
-        id: 5,
-        type: 'أحجية',
-        question: 'ما هو الشيء الذي كلما أخذت منه كبر؟',
-        answer: ['صورة', 'photo', 'رسم'],
-        hint: 'شيء موجود في الإطار'
-    },
-    {
-        id: 6,
-        type: 'أحجية',
-        question: 'ما هو اليوم الذي يأتي قبل الجمعة؟',
-        answer: ['الخميس', 'Thursday'],
-        hint: 'يوم نهاية الأسبوع'
-    },
-    {
-        id: 7,
-        type: 'أحجية',
-        question: 'ما هو لون الدم في الشرايين؟',
-        answer: ['أحمر', 'red', 'الأحمر'],
-        hint: 'لون معروف'
-    },
-    {
-        id: 8,
-        type: 'أحجية',
-        question: 'ما هو أضخم حيوان على الأرض؟',
-        answer: ['حوت', 'whale', 'الحوت'],
-        hint: 'حيوان بحري ضخم'
-    },
-    {
-        id: 9,
-        type: 'أحجية',
-        question: 'ما هو عكس كلمة كبير؟',
-        answer: ['صغير', 'small', 'الصغير'],
-        hint: 'نقيض الحجم'
-    },
-    {
-        id: 10,
-        type: 'أحجية',
-        question: 'في أي قارة تقع مصر؟',
-        answer: ['أفريقيا', 'Africa', 'افريقيا'],
-        hint: 'قارة سوداء'
-    },
-    {
-        id: 11,
-        type: 'أحجية',
-        question: 'ما هو المعدن الذي يصدأ؟',
-        answer: ['حديد', 'iron', 'الحديد'],
-        hint: 'فلز قوي'
-    },
-    {
-        id: 12,
-        type: 'أحجية',
-        question: 'كم عظمة في جسم الإنسان؟',
-        answer: ['206', 'مئتين وست', '206 عظمة'],
-        hint: 'عدد كبير'
-    },
-    {
-        id: 13,
-        type: 'أحجية',
-        question: 'ما هو الغاز الذي تتنفسه النباتات؟',
-        answer: ['ثاني أكسيد الكربون', 'كربون', 'CO2'],
-        hint: 'غاز لونه عديم'
-    },
-    {
-        id: 14,
-        type: 'أحجية',
-        question: 'ما هو أطول نهر في العالم؟',
-        answer: ['النيل', 'Nile', 'النيل'],
-        hint: 'نهر في أفريقيا'
-    },
-    {
-        id: 15,
-        type: 'أحجية',
-        question: 'ما هو لون الياقوت الأزرق؟',
-        answer: ['أزرق', 'blue', 'الأزرق'],
-        hint: 'لون السماء'
-    },
-    {
-        id: 16,
-        type: 'أحجية',
-        question: 'من هو مؤلف كتاب ألف ليلة وليلة؟',
-        answer: ['عربي', 'غير معروف', 'unknown'],
-        hint: 'مجموعة قصص'
-    },
-    {
-        id: 17,
-        type: 'أحجية',
-        question: 'ما هو الشيء الذي ليس له بداية ولا نهاية؟',
-        answer: ['دائرة', 'circle', 'الدائرة'],
-        hint: 'شكل هندسي'
-    },
-    {
-        id: 18,
-        type: 'أحجية',
-        question: 'في أي سنة بدأ القرن الحادي والعشرون؟',
-        answer: ['2001', 'عام 2001'],
-        hint: 'سنة قريبة'
-    },
-    {
-        id: 19,
-        type: 'أحجية',
-        question: 'ما هو أقدم مدينتين في التاريخ؟',
-        answer: ['دمشق', 'Damascus'],
-        hint: 'عاصمة سوريا'
-    },
-    {
-        id: 20,
-        type: 'أحجية',
-        question: 'ما هو مفتاح النجاح؟',
-        answer: ['العمل', 'الجد', 'effort'],
-        hint: 'كلمة من 4 حروف'
-    }
+    { id: 1, type: 'أحجية', question: 'ما هو الرقم الذي يأتي بعد 9 وأقل من 11؟', answer: ['10', 'عشرة'] },
+    { id: 2, type: 'أحجية', question: 'ما هو الشهر الذي عدد أيامه 28 يوم؟', answer: ['فبراير', 'شباط', 'February'] },
+    { id: 3, type: 'أحجية', question: 'ما هو الحيوان الذي يُعرف بملك الغابة؟', answer: ['أسد', 'lion', 'الأسد'] },
+    { id: 4, type: 'أحجية', question: 'كم عدد ألوان قوس قزح الأساسية؟', answer: ['7', 'سبعة', 'seven'] },
+    { id: 5, type: 'أحجية', question: 'ما هو الشيء الذي كلما أخذت منه كبر؟', answer: ['صورة', 'photo', 'رسم'] },
+    { id: 6, type: 'أحجية', question: 'ما هو اليوم الذي يأتي قبل الجمعة؟', answer: ['الخميس', 'Thursday'] },
+    { id: 7, type: 'أحجية', question: 'ما هو لون الدم في الشرايين؟', answer: ['أحمر', 'red', 'الأحمر'] },
+    { id: 8, type: 'أحجية', question: 'ما هو أضخم حيوان على الأرض؟', answer: ['حوت', 'whale', 'الحوت'] },
+    { id: 9, type: 'أحجية', question: 'ما هو عكس كلمة كبير؟', answer: ['صغير', 'small', 'الصغير'] },
+    { id: 10, type: 'أحجية', question: 'في أي قارة تقع مصر؟', answer: ['أفريقيا', 'Africa', 'افريقيا'] },
+    { id: 11, type: 'أحجية', question: 'ما هو المعدن الذي يصدأ؟', answer: ['حديد', 'iron', 'الحديد'] },
+    { id: 12, type: 'أحجية', question: 'كم عظمة في جسم الإنسان؟', answer: ['206', 'مئتين وست', '206 عظمة'] },
+    { id: 13, type: 'أحجية', question: 'ما هو الغاز الذي تتنفسه النباتات؟', answer: ['ثاني أكسيد الكربون', 'كربون', 'CO2'] },
+    { id: 14, type: 'أحجية', question: 'ما هو أطول نهر في العالم؟', answer: ['النيل', 'Nile', 'النيل'] },
+    { id: 15, type: 'أحجية', question: 'ما هو لون الياقوت الأزرق؟', answer: ['أزرق', 'blue', 'الأزرق'] },
+    { id: 16, type: 'أحجية', question: 'من هو مؤلف كتاب ألف ليلة وليلة؟', answer: ['عربي', 'غير معروف', 'unknown'] },
+    { id: 17, type: 'أحجية', question: 'ما هو الشيء الذي ليس له بداية ولا نهاية؟', answer: ['دائرة', 'circle', 'الدائرة'] },
+    { id: 18, type: 'أحجية', question: 'في أي سنة بدأ القرن الحادي والعشرون؟', answer: ['2001', 'عام 2001'] },
+    { id: 19, type: 'أحجية', question: 'ما هو أقدم مدينتين في التاريخ؟', answer: ['دمشق', 'Damascus'] },
+    { id: 20, type: 'أحجية', question: 'ما هو مفتاح النجاح؟', answer: ['العمل', 'الجد', 'effort'] }
 ];
 
 class CryptoPuzzleGame {
@@ -190,14 +70,6 @@ class CryptoPuzzleGame {
         document.getElementById('submitBtn').addEventListener('click', () => this.submitAnswer());
         document.getElementById('answerInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.submitAnswer();
-        });
-        
-        document.querySelector('.puzzle-hint').addEventListener('click', () => this.showHint());
-        document.querySelector('.close-modal').addEventListener('click', () => this.hideHint());
-        document.querySelector('.btn-hint').addEventListener('click', () => this.useHint());
-        
-        document.getElementById('hintModal').addEventListener('click', (e) => {
-            if (e.target.id === 'hintModal') this.hideHint();
         });
     }
     
@@ -294,27 +166,6 @@ class CryptoPuzzleGame {
         this.updateProgress();
     }
     
-    showHint() {
-        const puzzle = PUZZLES.find(p => p.id === this.currentLevel);
-        document.getElementById('hintText').textContent = puzzle.hint;
-        document.getElementById('hintModal').classList.add('active');
-    }
-    
-    hideHint() {
-        document.getElementById('hintModal').classList.remove('active');
-    }
-    
-    useHint() {
-        if (this.totalPoints >= 5) {
-            this.totalPoints -= 5;
-            this.updateProgress();
-            this.hideHint();
-            this.showToast('✅ تم استخدام التلميح! -5 نقاط', 'success');
-        } else {
-            this.showToast('❌ نقاط غير كافية!', 'error');
-        }
-    }
-    
     startTimer() {
         if (this.timerInterval) clearInterval(this.timerInterval);
         
@@ -339,33 +190,6 @@ class CryptoPuzzleGame {
         });
         
         document.getElementById('gameSection').style.display = page === 'game' ? 'block' : 'none';
-        document.getElementById('leaderboardSection').style.display = page === 'leaderboard' ? 'block' : 'none';
-        
-        if (page === 'leaderboard') {
-            this.loadLeaderboard();
-        }
-    }
-    
-    loadLeaderboard() {
-        const leaderboardData = [
-            { name: 'أحمد', level: 20, score: 2000 },
-            { name: 'محمد', level: 18, score: 1800 },
-            { name: 'سارة', level: 15, score: 1500 },
-            { name: 'علي', level: 12, score: 1200 },
-            { name: 'فاطمة', level: 10, score: 1000 }
-        ];
-        
-        const list = document.getElementById('leaderboardList');
-        list.innerHTML = leaderboardData.map((player, index) => `
-            <div class="leaderboard-item top-${index + 1}">
-                <div class="rank">${index + 1}</div>
-                <div class="player-info">
-                    <div class="player-name">${player.name}</div>
-                    <div class="player-level">المستوى ${player.level}</div>
-                </div>
-                <div class="player-score">${player.score}</div>
-            </div>
-        `).join('');
     }
     
     loadUserData() {

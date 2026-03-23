@@ -78,7 +78,6 @@
                 <div class="puzzle-card">
                     <div class="puzzle-header">
                         <div class="puzzle-type"><i class="fas fa-puzzle-piece"></i><span id="puzzleType">أحجية</span></div>
-                        <div class="puzzle-hint"><i class="fas fa-lightbulb"></i><span>تلميح</span></div>
                     </div>
                     <div class="puzzle-content"><div class="puzzle-question" id="puzzleQuestion"></div></div>
                     <div class="puzzle-input-area">
@@ -90,32 +89,11 @@
                         <div class="time-info"><i class="fas fa-clock"></i><span>الوقت: <strong id="timer">00:00</strong></span></div>
                     </div>
                 </div>
-
-                <div class="hint-modal" id="hintModal">
-                    <div class="modal-content">
-                        <button class="close-modal">✖</button>
-                        <h3>💡 تلميح</h3>
-                        <p id="hintText">...</p>
-                        <div class="hint-cost"><i class="fas fa-coins"></i><span>التكلفة: 5 نقاط</span></div>
-                        <button class="btn-hint">استخدام التلميح</button>
-                    </div>
-                </div>
-            </section>
-
-            <section id="leaderboardSection" class="leaderboard-section" style="display: none;">
-                <div class="leaderboard-card">
-                    <div class="leaderboard-header">
-                        <h2>🏆 لوحة المتصدرين</h2>
-                        <p>نافس الآخرين واربح!</p>
-                    </div>
-                    <div class="leaderboard-list" id="leaderboardList"></div>
-                </div>
             </section>
         </main>
 
         <nav class="game-nav">
             <button class="nav-btn active" data-page="game"><i class="fas fa-gamepad"></i><span>اللعبة</span></button>
-            <button class="nav-btn" data-page="leaderboard"><i class="fas fa-trophy"></i><span>الترتيب</span></button>
             <button class="nav-btn" data-page="wallet"><i class="fas fa-wallet"></i><span>المحفظة</span></button>
             <button class="nav-btn" data-page="profile"><i class="fas fa-user-cog"></i><span>الملف</span></button>
         </nav>
