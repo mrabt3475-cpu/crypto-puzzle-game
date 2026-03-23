@@ -1,24 +1,23 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
+const path = require('path');
+const { securityHeaders, corsOptions, generalLimiter } = require('./middleware/security');
 require('dotenv').config();
-
 const app = express();
-app.use(cors);
-app.use(express.json());
-
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/puzzle-game')
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.log(err));
-
-// Routes
+app.use(securityHeaders);
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(generalLimiter);
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/puzzle-game').then(() => console.log('✅ MongoDB connected')).catch(err => console.error('MongoDB Error:', err));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/puzzles', require('./routes/puzzles'));
-app.use('/api/puzzles-v2', require('./routes/puzzles_v2')); // ✅ النظام الجديد
+app.use('/api/puzzles-v2', require('./routes/puzzles_v2'));
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/teams', require('./routes/teams'));
-
 app.use('/file', express.static(path.join(__dirname, 'public')));
-
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.use((err, req, res, next) => { console.error('Error:', err); if (err.name === 'ValidationError') return res.status(400).json({ error: 'Validation error' }); if (err.name === 'CastError') return res.status(400).json({ error: 'Invalid ID' }); res.status(500).json({ error: 'Internal error' }); });
+app.use((req, res) => res.status(404).json({ error: 'Endpoint not found' }));
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server on port ${PORT} | 🔒 Security enabled`));
