@@ -29,17 +29,20 @@ const {
     validateMethod
 } = require('./middleware/securityMiddleware');
 
-// Encryption middleware
 const {
     encryptResponse,
     decryptRequest,
     generateSecureAPIKey,
-    encryptUserData,
-    decryptUserData,
     generateUserKeyPair,
     signData,
     verifySignature
 } = require('./middleware/encryptionMiddleware');
+
+// Monitoring
+const MonitoringService = require('./middleware/monitoring');
+const monitoring = new MonitoringService();
+
+global.monitoring = monitoring;
 
 const app = express();
 
@@ -65,6 +68,9 @@ app.use(cors({
 
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+// Monitoring middleware
+app.use(monitoring.middleware());
 
 // Global rate limiting
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { error: 'Too many requests' } }));
@@ -98,72 +104,50 @@ app.get('/wp-admin', (req, res) => { console.log('🚨 HONEYPOT:', req.ip); res.
 app.post('/.env', (req, res) => { console.log('🚨 HONEYPOT:', req.ip); res.status(404).send('Not found'); });
 
 // API Routes
-app.use('/api/auth', validateMethod('POST'), validateInput({
-    action: { required: true, type: 'string' }
-}), authRoutes);
-
+app.use('/api/auth', validateMethod('POST'), validateInput({ action: { required: true, type: 'string' } }), authRoutes);
 app.use('/api/payment', validateMethod('POST', 'GET'), paymentRoutes);
 app.use('/api/puzzle', validateMethod('POST', 'GET'), puzzleRoutes);
 app.use('/api/zkpuzzle', validateMethod('POST', 'GET'), zkPuzzleRoutes);
 app.use('/api/metapuzzle', validateMethod('POST', 'GET'), metaPuzzleRoutes);
 
-// Encryption API endpoints
+// Encryption endpoints
 app.post('/api/encryption/generate-keypair', (req, res) => {
     try {
         const keyPair = generateUserKeyPair();
         res.json({ success: true, publicKey: keyPair.publicKey });
-    } catch (e) {
-        res.status(500).json({ error: 'Failed to generate key pair' });
-    }
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
 app.post('/api/encryption/sign', (req, res) => {
     try {
         const { data, privateKey } = req.body;
-        if (!data || !privateKey) {
-            return res.status(400).json({ error: 'Missing data or privateKey' });
-        }
+        if (!data || !privateKey) return res.status(400).json({ error: 'Missing parameters' });
         const signature = signData(JSON.stringify(data), privateKey);
         res.json({ success: true, signature });
-    } catch (e) {
-        res.status(500).json({ error: 'Failed to sign data' });
-    }
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
 app.post('/api/encryption/verify', (req, res) => {
     try {
         const { data, signature, publicKey } = req.body;
-        if (!data || !signature || !publicKey) {
-            return res.status(400).json({ error: 'Missing parameters' });
-        }
+        if (!data || !signature || !publicKey) return res.status(400).json({ error: 'Missing parameters' });
         const isValid = verifySignature(JSON.stringify(data), signature, publicKey);
         res.json({ success: true, valid: isValid });
-    } catch (e) {
-        res.status(500).json({ error: 'Failed to verify signature' });
-    }
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
 app.post('/api/encryption/generate-api-key', async (req, res) => {
     try {
         const { userId } = req.body;
-        if (!userId) {
-            return res.status(400).json({ error: 'Missing userId' });
-        }
+        if (!userId) return res.status(400).json({ error: 'Missing userId' });
         const result = await generateSecureAPIKey(userId);
         res.json({ success: true, apiKey: result.apiKey });
-    } catch (e) {
-        res.status(500).json({ error: 'Failed to generate API key' });
-    }
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
-// Health check
-app.get('/health', (req, res) => res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    security: 'complete',
-    encryption: 'enabled',
-    version: '3.0'
-}));
+// Health & Metrics
+app.get('/health', (req, res) => res.json(monitoring.getHealth()));
+app.get('/metrics', (req, res) => res.json(monitoring.getMetrics()));
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
@@ -171,6 +155,7 @@ app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // Error handler
 app.use((err, req, res, next) => {
     console.error('Error:', err);
+    monitoring.recordError(err, { path: req.path, method: req.method });
     res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal error' : err.message });
 });
 
@@ -180,11 +165,31 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/puzzle
 mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true, maxPoolSize: 10 }).then(async () => {
     console.log('✅ MongoDB Connected');
     
+    // Connect to Redis
+    try {
+        const CacheManager = require('./middleware/cache');
+        const cache = new CacheManager();
+        await cache.connect();
+        global.cacheManager = cache;
+    } catch(e) { console.log('Redis not connected, continuing without cache'); }
+    
+    // Initialize WebSocket
+    const server = app.listen(PORT, () => {
+        console.log('🚀 MRABT: The Lost Block - Production Ready - Port', PORT);
+        
+        // Start WebSocket
+        try {
+            const WebSocketHandler = require('./middleware/websocket');
+            const ws = new WebSocketHandler(server);
+            ws.startHeartbeat();
+            global.wsHandler = ws;
+        } catch(e) { console.log('WebSocket not initialized'); }
+    });
+    
     // Initialize puzzles
     try { const ZKPuzzle = require('./models/ZKPuzzle'); await ZKPuzzle.initializePuzzles(); } catch(e) {}
     try { const MetaPuzzle = require('./models/MetaPuzzle'); await MetaPuzzle.initializePuzzles(); } catch(e) {}
     
-    app.listen(PORT, () => console.log('🚀 MRABT: The Lost Block - Full Encryption - Port', PORT));
 }).catch(e => { console.error(e); process.exit(1); });
 
 module.exports = app;
