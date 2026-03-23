@@ -1,9 +1,10 @@
 /**
- * Binance Payment Utility
- * Handles crypto payments via Binance API
+ * Binance Payment Utility - Real API Integration
+ * Uses Binance API for deposit addresses and payment verification
  */
 
 const crypto = require('crypto');
+const axios = require('axios');
 
 class BinancePayment {
   constructor() {
@@ -11,36 +12,217 @@ class BinancePayment {
     this.apiSecret = process.env.BINANCE_API_SECRET || '';
     this.walletAddress = process.env.BINANCE_WALLET_ADDRESS || '';
     this.network = process.env.BINANCE_NETWORK || 'TRC20'; // TRC20, ERC20, BEP20
+    this.baseUrl = 'https://api.binance.com'; // Production
+    // this.baseUrl = 'https://testnet.binance.vision'; // Testnet
     
-    // Demo wallet addresses for different networks
-    this.demoAddresses = {
-      TRC20: 'TXmNr7w8mK7xT3QqM8s2nJ4vP6yX9zA1B',
-      ERC20: '0x742d35Cc6634C0532925a3b844Bc9e7595f0fE12',
-      BEP20: '0x742d35Cc6634C0532925a3b844Bc9e7595f0fE12'
+    this.isConfigured = !!(this.apiKey && this.apiSecret && this.walletAddress);
+  }
+
+  // Generate signature for Binance API
+  generateSignature(queryString) {
+    return crypto
+      .createHmac('sha256', this.apiSecret)
+      .update(queryString)
+      .digest('hex');
+  }
+
+  // Make authenticated request to Binance API
+  async makeRequest(method, endpoint, params = {}) {
+    if (!this.isConfigured) {
+      throw new Error('Binance API not configured. Add BINANCE_API_KEY and BINANCE_API_SECRET to .env');
+    }
+
+    const timestamp = Date.now();
+    const queryString = new URLSearchParams({
+      ...params,
+      timestamp,
+      recvWindow: 5000
+    }).toString();
+
+    const signature = this.generateSignature(queryString);
+    const url = `${this.baseUrl}${endpoint}?${queryString}&signature=${signature}`;
+
+    try {
+      const response = await axios({
+        method,
+        url,
+        headers: {
+          'X-MBX-APIKEY': this.apiKey,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Binance API Error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  // Get deposit address for specific network
+  async getDepositAddress(coin = 'USDT', network = null) {
+    // Map network names
+    const networkMap = {
+      'TRC20': 'TRX',
+      'ERC20': 'ETH',
+      'BEP20': 'BSC'
+    };
+    
+    const networkName = networkMap[network] || networkMap[this.network];
+    
+    if (!this.isConfigured) {
+      // Fallback to demo if not configured
+      return this.getDemoAddress(networkName);
+    }
+
+    try {
+      const response = await this.makeRequest(
+        'GET',
+        '/api/v3/capital/deposit/address',
+        { coin, network: networkName }
+      );
+      
+      return {
+        address: response.address,
+        memo: response.memo || null,
+        network: networkName,
+        coin,
+        success: true
+      };
+    } catch (error) {
+      console.error('Failed to get deposit address:', error.message);
+      // Fallback to demo
+      return this.getDemoAddress(networkName);
+    }
+  }
+
+  // Get demo address (when API not configured)
+  getDemoAddress(network) {
+    const demoAddresses = {
+      'TRX': 'TXmNr7w8mK7xT3QqM8s2nJ4vP6yX9zA1B',
+      'ETH': '0x742d35Cc6634C0532925a3b844Bc9e7595f0fE12',
+      'BSC': '0x742d35Cc6634C0532925a3b844Bc9e7595f0fE12'
+    };
+    
+    return {
+      address: demoAddresses[network] || demoAddresses.TRX,
+      memo: network === 'TRX' ? '12345678' : null,
+      network,
+      coin: 'USDT',
+      success: true,
+      isDemo: true
+    };
+  }
+
+  // Check deposit history
+  async getDepositHistory(coin = 'USDT', startTime = null, limit = 10) {
+    if (!this.isConfigured) {
+      throw new Error('Binance API not configured');
+    }
+
+    const params = { coin, limit };
+    if (startTime) params.startTime = startTime;
+
+    try {
+      const response = await this.makeRequest(
+        'GET',
+        '/api/v3/capital/deposit/hisrec',
+        params
+      );
+      return response;
+    } catch (error) {
+      console.error('Failed to get deposit history:', error.message);
+      throw error;
+    }
+  }
+
+  // Check specific transaction by txId
+  async checkTransaction(txHash, coin = 'USDT', network = null) {
+    if (!this.isConfigured) {
+      // Demo mode - simulate verification
+      return this.verifyDemoTransaction(txHash);
+    }
+
+    const networkMap = {
+      'TRC20': 'TRX',
+      'ERC20': 'ETH',
+      'BEP20': 'BSC'
+    };
+    
+    const networkName = networkMap[network] || networkMap[this.network];
+
+    try {
+      // Get recent deposits and check for matching txHash
+      const deposits = await this.getDepositHistory(coin, Date.now() - 3600000 * 24); // Last 24 hours
+      
+      const deposit = deposits.find(d => 
+        d.txId === txHash || 
+        d.txId.toLowerCase() === txHash.toLowerCase()
+      );
+      
+      if (deposit) {
+        return {
+          success: true,
+          confirmed: deposit.status === 1, // 0: pending, 1: success
+          amount: parseFloat(deposit.amount),
+          txHash: deposit.txId,
+          network: deposit.network,
+          confirmations: deposit.confirmTimes?.split('/')[0] || '0'
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Transaction not found in deposit history'
+      };
+    } catch (error) {
+      console.error('Failed to check transaction:', error.message);
+      return {
+        success: false,
+        message: error.message
+      };
+    }
+  }
+
+  // Demo transaction verification
+  verifyDemoTransaction(txHash) {
+    // Accept any txHash that looks valid (64 hex characters)
+    const isValid = /^[a-fA-F0-9]{64}$/.test(txHash);
+    
+    return {
+      success: isValid,
+      confirmed: isValid,
+      message: isValid ? 'Demo: Transaction verified' : 'Invalid transaction hash',
+      isDemo: true
     };
   }
 
   // Generate payment address for user
   async generatePaymentAddress(userId, level) {
-    // In production, this would call Binance API to create a deposit address
-    // For demo, we generate a unique address based on userId
+    const networkMap = {
+      'TRC20': 'TRX',
+      'ERC20': 'ETH',
+      'BEP20': 'BSC'
+    };
     
-    const timestamp = Date.now();
-    const hash = crypto.createHash('sha256').update(userId + timestamp).digest('hex');
+    const networkName = networkMap[this.network];
     
-    // Generate address based on network
-    const baseAddress = this.demoAddresses[this.network] || this.demoAddresses.TRC20;
-    const uniquePart = hash.substring(0, 8).toUpperCase();
+    // Get real or demo address
+    const depositInfo = await this.getDepositAddress('USDT', this.network);
+    
+    // Generate unique memo for TRC20 (required)
+    const memo = depositInfo.memo || crypto.createHash('md5').update(userId + level).digest('hex').substring(0, 8);
     
     return {
-      address: `${baseAddress.substring(0, 10)}${uniquePart}${baseAddress.substring(18)}`,
+      address: depositInfo.address,
       network: this.network,
+      networkName,
       currency: 'USDT',
-      memo: hash.substring(8, 16), // For TRC20
-      qrCode: `trc20:${baseAddress}?memo=${hash.substring(8, 16)}`,
+      memo: memo,
+      qrCode: `trc20:${depositInfo.address}?memo=${memo}`,
       expiresAt: Date.now() + (15 * 60 * 1000), // 15 minutes
       amount: this.getLevelPrice(level),
-      level
+      level,
+      isDemo: depositInfo.isDemo || false
     };
   }
 
@@ -60,50 +242,54 @@ class BinancePayment {
     return prices[level] || 1;
   }
 
-  // Verify payment (simulated)
+  // Verify payment with real Binance API
   async verifyPayment(paymentDetails) {
-    // In production, this would call Binance API to check transaction
-    // For demo, we simulate verification
-    
     const { txHash, amount, userId, level } = paymentDetails;
+    const expectedAmount = this.getLevelPrice(level);
     
-    // Simulate network delay
-    await this.delay(1000);
+    // Check transaction on blockchain
+    const txInfo = await this.checkTransaction(txHash, 'USDT', this.network);
     
-    // In production, verify via blockchain explorer API
-    // For demo, accept any valid-looking tx hash
-    if (!txHash || txHash.length < 10) {
+    if (!txInfo.success) {
       return {
         success: false,
-        message: 'Invalid transaction hash'
+        message: txInfo.message || 'Transaction not found'
       };
     }
-
-    // Simulate successful verification (in production, check actual blockchain)
-    const expectedAmount = this.getLevelPrice(level);
-    if (amount >= expectedAmount) {
+    
+    // Check if confirmed
+    if (!txInfo.confirmed) {
       return {
-        success: true,
-        message: 'Payment verified successfully',
-        txHash,
-        amount,
-        confirmedAt: Date.now()
+        success: false,
+        message: 'Transaction not confirmed yet'
       };
     }
-
+    
+    // Check amount
+    if (txInfo.amount < expectedAmount) {
+      return {
+        success: false,
+        message: `Amount too low. Expected: ${expectedAmount} USDT, Received: ${txInfo.amount} USDT`
+      };
+    }
+    
     return {
-      success: false,
-      message: `Amount too low. Expected: ${expectedAmount} USDT`
+      success: true,
+      message: 'Payment verified successfully',
+      txHash,
+      amount: txInfo.amount,
+      confirmedAt: Date.now(),
+      confirmations: txInfo.confirmations
     };
   }
 
   // Get wallet address (for deposits)
   getWalletAddress() {
     return {
-      address: this.demoAddresses[this.network],
+      address: this.walletAddress,
       network: this.network,
       currency: 'USDT',
-      qrCode: `trc20:${this.demoAddresses[this.network]}`
+      qrCode: `trc20:${this.walletAddress}`
     };
   }
 
@@ -123,7 +309,8 @@ class BinancePayment {
       memo: paymentAddress.memo,
       qrCode: paymentAddress.qrCode,
       expiresAt: paymentAddress.expiresAt,
-      instructions: this.getPaymentInstructions(this.network)
+      instructions: this.getPaymentInstructions(this.network),
+      isDemo: paymentAddress.isDemo || false
     };
   }
 
@@ -159,18 +346,12 @@ class BinancePayment {
 
   // Check payment status
   async checkPaymentStatus(invoiceId) {
-    // In production, check via blockchain API
-    // For demo, return pending
+    // In production, check via Binance API
     return {
       invoiceId,
       status: 'PENDING',
       message: 'Waiting for payment confirmation'
     };
-  }
-
-  // Helper function for delay
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   // Get supported networks
@@ -189,6 +370,11 @@ class BinancePayment {
       total += this.getLevelPrice(level);
     }
     return total;
+  }
+
+  // Check if API is configured
+  isApiConfigured() {
+    return this.isConfigured;
   }
 }
 
