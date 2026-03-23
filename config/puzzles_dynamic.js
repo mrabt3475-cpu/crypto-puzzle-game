@@ -1,485 +1,410 @@
+/**
+ * Dynamic Puzzle Generator - 30 Levels
+ * Levels 1-20: Regular puzzles
+ * Levels 21-30: Epic 10-stage cryptographic puzzles
+ */
+
 const crypto = require('crypto');
+const { generateEpicPuzzle, validateEpicAnswer, getEpicPuzzles } = require('../config/epicPuzzles');
 
-// Generate unique seed for each user
+// Generate seed from userId
 function generateSeed(userId) {
-  return crypto.createHash('sha256').update(userId + Date.now()).digest('hex').substring(0, 16);
+  const hash = crypto.createHash('sha256').update(userId + Date.now()).digest('hex');
+  return parseInt(hash.substring(0, 8), 16);
 }
 
-// Generate dynamic question based on seed and previous answer
-function generateQuestion(level, seed, previousAnswer = null) {
-  const questions = {
-    1: {
-      type: 'personal_age',
-      question: 'ما هو عمرك؟ (أدخل رقمًا صحيحًا)',
-      hint: 'سيُستخدم هذا الرقم لتوليد مفتاح السؤال التالي',
-      generate: (seed) => ({ seed: seed }),
-      validate: (answer, data, seed) => {
-        const age = parseInt(answer);
-        if (isNaN(age) || age < 1 || age > 150) return { valid: false, message: 'عمر غير صالح' };
-        const nextKey = crypto.createHash('sha256').update(seed + age).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(age).charAt(0) };
-      }
-    },
-    2: {
-      type: 'personal_name',
-      question: 'ما هو اسمك الأول؟ (حروف إنجليزية فقط)',
-      hint: 'سيُدمج مع مفتاح السؤال السابق',
-      generate: (seed) => ({ seed }),
-      validate: (answer, data, seed) => {
-        const name = answer.trim().toUpperCase().replace(/[^A-Z]/g, '');
-        if (name.length < 2) return { valid: false, message: 'اسم قصير جداً' };
-        const nextKey = crypto.createHash('sha256').update(seed + name).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: name.charAt(0) };
-      }
-    },
-    3: {
-      type: 'math_modular',
-      question: '',
-      hint: 'استخدم العمليات الرياضية الأساسية',
-      generate: (seed) => {
-        const num = parseInt(seed.substring(0, 4), 16) % 100 + 10;
-        const multiplier = parseInt(seed.substring(4, 6), 16) % 10 + 2;
-        const modulus = 97;
-        return { question: `حل المعادلة: (${num} × ${multiplier}) mod ${modulus} = ?`, num, multiplier, modulus };
-      },
-      validate: (answer, data, seed) => {
-        const correct = (data.num * data.multiplier) % data.modulus;
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `الإجابة الصحيحة هي ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    4: {
-      type: 'math_power',
-      question: '',
-      hint: 'ترتيب العمليات مهم',
-      generate: (seed) => {
-        const base = parseInt(seed.substring(0, 2), 16) % 5 + 2;
-        const exp = parseInt(seed.substring(2, 4), 16) % 4 + 2;
-        const modulus = 100;
-        return { question: `احسب: (${base}^${exp}) mod ${modulus}`, base, exp, modulus };
-      },
-      validate: (answer, data, seed) => {
-        const correct = Math.pow(data.base, data.exp) % data.modulus;
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `الإجابة الصحيحة هي ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).slice(-1) };
-      }
-    },
-    5: {
-      type: 'string_ascii',
-      question: '',
-      hint: 'حوّل الأحرف لأرقام ASCII واجمعها',
-      generate: (seed) => ({ question: 'احسب مجموع ASCII لـ: PUZZLE', word: 'PUZZLE' }),
-      validate: (answer, data, seed) => {
-        const correct = data.word.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `مجموع ASCII هو ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    6: {
-      type: 'hash_sha256',
-      question: '',
-      hint: 'استخدم أي أداة hash online',
-      generate: (seed) => {
-        const input = 'CRYPTO' + seed.substring(0, 4);
-        return { question: `ما هو SHA256 hash لـ: "${input}"? (أول 8 أحرف)`, input };
-      },
-      validate: (answer, data, seed) => {
-        const correct = crypto.createHash('sha256').update(data.input).digest('hex').substring(0, 8);
-        if (answer.toLowerCase() !== correct) return { valid: false, message: `أول 8 أحرف هي: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    7: {
-      type: 'xor_cipher',
-      question: '',
-      hint: 'XOR يعكس العملية',
-      generate: (seed) => {
-        const key = 0xA5;
-        const plaintext = 'HI';
-        const encrypted = Buffer.from(plaintext).reduce((acc, byte) => acc ^ key, 0);
-        return { question: `إذا كان plaintext "HI" مشفر بـ XOR مع 0x${key.toString(16).toUpperCase()}، ما هي القيمة المشفرة؟ (hex)`, key, plaintext, encrypted };
-      },
-      validate: (answer, data, seed) => {
-        const userAns = answer.toUpperCase().replace(/^0X/, '');
-        const correct = data.encrypted.toString(16).toUpperCase();
-        if (userAns !== correct) return { valid: false, message: `الإجابة: 0x${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    8: {
-      type: 'base64_encode',
-      question: '',
-      hint: 'استخدم Base64 encoding',
-      generate: (seed) => ({ question: 'ما هو Base64 encoding لـ: "KEY"?', text: 'KEY' }),
-      validate: (answer, data, seed) => {
-        const correct = Buffer.from(data.text).toString('base64');
-        if (answer.trim() !== correct) return { valid: false, message: `الإجابة: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    9: {
-      type: 'hex_to_decimal',
-      question: '',
-      hint: 'حوّل من hex لعشري',
-      generate: (seed) => {
-        const hex = '0x' + seed.substring(0, 4);
-        return { question: `حوّل ${hex} للعشري`, hex };
-      },
-      validate: (answer, data, seed) => {
-        const correct = parseInt(data.hex);
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `القيمة العشرية: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    10: {
-      type: 'sequence_pattern',
-      question: '',
-      hint: 'ابحث عن النمط: كل رقم ضعف السابق + 1',
-      generate: (seed) => {
-        const start = parseInt(seed.substring(0, 2), 16) % 5 + 1;
-        const sequence = [start];
-        for (let i = 0; i < 4; i++) sequence.push(sequence[sequence.length - 1] * 2 + 1);
-        return { question: `ما هو الرقم التالي في المتسلسلة: ${sequence.join(', ')}, ?`, sequence };
-      },
-      validate: (answer, data, seed) => {
-        const correct = data.sequence[data.sequence.length - 1] * 2 + 1;
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `الرقم التالي هو: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    11: {
-      type: 'cumulative_key',
-      question: 'اجمع مفتاح السؤال الأول + مفتاح السؤال الخامس؟ (اكتب الرقم فقط)',
-      hint: 'المفاتيح هي أرقام',
-      generate: (seed) => ({ seed }),
-      validate: (answer, data, seed, history) => {
-        if (!history[1] || !history[5]) return { valid: false, message: 'لا يمكنك حل هذا بدون إجابات سابقة' };
-        const key1 = parseInt(history[1].partialKey || '0', 36);
-        const key5 = parseInt(history[5].partialKey || '0', 36);
-        const correct = key1 + key5;
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `المجموع هو: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    12: {
-      type: 'reverse_string',
-      question: '',
-      hint: 'اقلب الأحرف',
-      generate: (seed) => {
-        const word = 'BLOCK' + seed.substring(0, 2);
-        return { question: `اقلب الكلمة: ${word}`, word };
-      },
-      validate: (answer, data, seed) => {
-        const correct = data.word.split('').reverse().join('');
-        if (answer.toUpperCase() !== correct) return { valid: false, message: `الإجابة: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    13: {
-      type: 'md5_partial',
-      question: '',
-      hint: 'MD5 hash - أول 4 أحرف فقط',
-      generate: (seed) => {
-        const input = 'GAME' + seed.substring(0, 2);
-        return { question: `ما أول 4 أحرف من MD5 hash لـ "${input}"?`, input };
-      },
-      validate: (answer, data, seed) => {
-        const correct = crypto.createHash('md5').update(data.input).digest('hex').substring(0, 4);
-        if (answer.toLowerCase() !== correct) return { valid: false, message: `أول 4 أحرف: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    14: {
-      type: 'prime_check',
-      question: '',
-      hint: 'هل الرقم أولي؟ (نعم/لا)',
-      generate: (seed) => {
-        const num = parseInt(seed.substring(0, 4), 16) % 100 + 10;
-        return { question: `هل ${num} عدد أولي؟`, num };
-      },
-      validate: (answer, data, seed) => {
-        const isPrime = (n) => {
-          if (n < 2) return false;
-          for (let i = 2; i <= Math.sqrt(n); i++) if (n % i === 0) return false;
-          return true;
-        };
-        const correct = isPrime(data.num) ? 'نعم' : 'لا';
-        if (answer.toLowerCase() !== correct.toLowerCase() && answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'no') {
-          return { valid: false, message: `الإجابة: ${correct}` };
-        }
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    15: {
-      type: 'composite_keys',
-      question: 'ادخل مفتاح السؤال الأول ثم مفتاح السؤال الثاني؟ (مثال: AB)',
-      hint: 'اربط المفتاحين مع بعض',
-      generate: (seed) => ({ seed }),
-      validate: (answer, data, seed, history) => {
-        if (!history[1] || !history[2]) return { valid: false, message: 'لا يمكنك حل هذا بدون إجابات سابقة' };
-        const key1 = history[1].partialKey || 'X';
-        const key2 = history[2].partialKey || 'X';
-        const correct = key1 + key2;
-        if (answer.toUpperCase() !== correct) return { valid: false, message: `اربط: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    16: {
-      type: 'blockchain_tx_hash',
-      question: '',
-      hint: 'صنع hash للمعاملة',
-      generate: (seed) => {
-        const tx = `{"from":"A","to":"B","amount":${parseInt(seed.substring(0,2),16)+1}}`;
-        return { question: `ما SHA256 hash لـ: ${tx}? (أول 6 أحرف)`, tx };
-      },
-      validate: (answer, data, seed) => {
-        const correct = crypto.createHash('sha256').update(data.tx).digest('hex').substring(0, 6);
-        if (answer.toLowerCase() !== correct) return { valid: false, message: `أول 6 أحرف: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    17: {
-      type: 'rsa_modulus',
-      question: '',
-      hint: 'RSA: p × q = n',
-      generate: (seed) => ({ question: 'في RSA، إذا كان p=61 و q=53، ما هو n؟', p: 61, q: 53 }),
-      validate: (answer, data, seed) => {
-        const correct = data.p * data.q;
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `n = ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    18: {
-      type: 'fibonacci',
-      question: '',
-      hint: 'Fibonacci: كل رقم مجموع الرقمين السابقتين',
-      generate: (seed) => {
-        const n = parseInt(seed.substring(0, 2), 16) % 5 + 5;
-        const fib = [1, 1];
-        for (let i = 2; i < n; i++) fib.push(fib[i-1] + fib[i-2]);
-        return { question: `ما الرقم ${n} في متسلسلة Fibonacci؟`, n, fib };
-      },
-      validate: (answer, data, seed) => {
-        const correct = data.fib[data.n - 1];
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `الرقم ${data.n} هو: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    19: {
-      type: 'binary_to_decimal',
-      question: '',
-      hint: 'حوّل من ثنائي لعشري',
-      generate: (seed) => {
-        const binary = '1010' + parseInt(seed.substring(0, 2), 16).toString(2).padStart(4, '0').substring(0, 2);
-        return { question: `حوّل ${binary} للعشري`, binary };
-      },
-      validate: (answer, data, seed) => {
-        const correct = parseInt(data.binary, 2);
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `القيمة: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    20: {
-      type: 'hmac_simple',
-      question: '',
-      hint: 'HMAC-SHA256 with key "SECRET"',
-      generate: (seed) => {
-        const msg = 'DATA' + seed.substring(0, 2);
-        return { question: `ما أول 4 أحرف من HMAC-SHA256("${msg}", key="SECRET")?`, msg, key: 'SECRET' };
-      },
-      validate: (answer, data, seed) => {
-        const hmac = crypto.createHmac('sha256', data.key).update(data.msg).digest('hex');
-        const correct = hmac.substring(0, 4);
-        if (answer.toLowerCase() !== correct) return { valid: false, message: `أول 4 أحرف: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    21: {
-      type: 'dynamic_equation',
-      question: '',
-      hint: 'المعادلة تعتمد على إجاباتك السابقة',
-      generate: (seed, prevAnswer, history) => {
-        const prevSum = Object.values(history || {}).reduce((sum, h) => sum + (parseInt(h.partialKey || '0', 36) || 0), 0);
-        const a = (prevSum % 20) + 5;
-        const b = parseInt(seed.substring(0, 2), 16) % 10 + 1;
-        return { question: `حل: ${a}x + ${b} = ${a * 5 + b}، ما قيمة x؟`, a, b };
-      },
-      validate: (answer, data, seed) => {
-        const correct = 5;
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `x = ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    22: {
-      type: 'merkle_root_simple',
-      question: '',
-      hint: 'Hash(A + B) حيث + يعني concatenate',
-      generate: (seed) => {
-        const left = 'TX1' + seed.substring(0, 2);
-        const right = 'TX2' + seed.substring(2, 4);
-        return { question: `احسب Merkle root (أول 4 أحرف)`, left, right };
-      },
-      validate: (answer, data, seed) => {
-        const leftHash = crypto.createHash('sha256').update(data.left).digest('hex');
-        const rightHash = crypto.createHash('sha256').update(data.right).digest('hex');
-        const merkle = crypto.createHash('sha256').update(leftHash + rightHash).digest('hex').substring(0, 4);
-        if (answer.toLowerCase() !== merkle) return { valid: false, message: `أول 4 أحرف: ${merkle}` };
-        const nextKey = crypto.createHash('sha256').update(seed + merkle).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: merkle.charAt(0) };
-      }
-    },
-    23: {
-      type: 'private_key_derive',
-      question: '',
-      hint: 'HD Wallet: key = hash(seed + path)',
-      generate: (seed) => {
-        const path = "m/44'/0'/0'/0/0";
-        return { question: `ما أول 4 أحرف من derived key؟`, path };
-      },
-      validate: (answer, data, seed) => {
-        const derived = crypto.createHash('sha256').update(seed.substring(0, 4) + data.path).digest('hex').substring(0, 4);
-        if (answer.toLowerCase() !== derived) return { valid: false, message: `أول 4 أحرف: ${derived}` };
-        const nextKey = crypto.createHash('sha256').update(seed + derived).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: derived.charAt(0) };
-      }
-    },
-    24: {
-      type: 'signature_verify',
-      question: '',
-      hint: 'ECDSA signature: r, s',
-      generate: (seed) => ({ question: 'ما أول 4 أحرف من signature؟', msg: 'PAYMENT' + seed.substring(0, 2) }),
-      validate: (answer, data, seed) => {
-        const sig = crypto.createHash('sha256').update('abc123def456').digest('hex').substring(0, 4);
-        if (answer.toLowerCase() !== sig) return { valid: false, message: `أول 4 أحرف: ${sig}` };
-        const nextKey = crypto.createHash('sha256').update(seed + sig).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: sig.charAt(0) };
-      }
-    },
-    25: {
-      type: 'gas_calculation',
-      question: '',
-      hint: 'Gas = baseFee + (data * 16)',
-      generate: (seed) => {
-        const baseFee = 21000;
-        const dataBytes = parseInt(seed.substring(0, 2), 16);
-        return { question: `احسب gas: baseFee=${baseFee}, data=${dataBytes} bytes`, baseFee, dataBytes };
-      },
-      validate: (answer, data, seed) => {
-        const correct = data.baseFee + (data.dataBytes * 16);
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `Gas = ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    26: {
-      type: 'token_transfer',
-      question: '',
-      hint: 'ERC-20: balance - amount = newBalance',
-      generate: (seed) => {
-        const balance = parseInt(seed.substring(0, 4), 16) % 1000 + 100;
-        const transfer = parseInt(seed.substring(4, 6), 16) % 100 + 10;
-        return { question: `رصيدك ${balance}، أرسلت ${transfer}، ما الرصيد الجديد؟`, balance, transfer };
-      },
-      validate: (answer, data, seed) => {
-        const correct = data.balance - data.transfer;
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `الرصيد الجديد: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    27: {
-      type: 'nonce_calculation',
-      question: '',
-      hint: 'Nonce = number of transactions + 1',
-      generate: (seed) => {
-        const txCount = parseInt(seed.substring(0, 2), 16) % 10 + 1;
-        return { question: `أرسلت ${txCount} معاملات، ما nonce التالي؟`, txCount };
-      },
-      validate: (answer, data, seed) => {
-        const correct = data.txCount + 1;
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `Nonce = ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: String(correct).charAt(0) };
-      }
-    },
-    28: {
-      type: 'eth_address_partial',
-      question: '',
-      hint: 'ETH address يبدأ بـ 0x',
-      generate: (seed) => {
-        const prefix = '0x' + seed.substring(0, 8);
-        return { question: `ما أول 6 أحرف من ETH address: ${prefix}...?`, prefix };
-      },
-      validate: (answer, data, seed) => {
-        const correct = data.prefix.substring(0, 6);
-        if (answer.toLowerCase() !== correct) return { valid: false, message: `أول 6 أحرف: ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + correct).digest('hex').substring(0, 8);
-        return { valid: true, nextKey, partialKey: correct.charAt(0) };
-      }
-    },
-    29: {
-      type: 'final_challenge',
-      question: '🎉 سؤال التحدي الأخير!\n\nاجمع المفاتيح: 1 + 5 + 10 + 15 + 20 + 25؟\n(اكتب الرقم النهائي)',
-      hint: 'جمع مفاتيح جزئية = مفتاح نهائي',
-      generate: (seed) => ({ seed }),
-      validate: (answer, data, seed, history) => {
-        const keys = [1, 5, 10, 15, 20, 25].map(i => parseInt(history[i]?.partialKey || '0', 36) || 0);
-        const correct = keys.reduce((a, b) => a + b, 0);
-        const userAns = parseInt(answer);
-        if (userAns !== correct) return { valid: false, message: `المجموع = ${correct}` };
-        const nextKey = crypto.createHash('sha256').update(seed + 'FINAL').digest('hex');
-        return { valid: true, nextKey, partialKey: '🏆', isFinal: true };
-      }
-    },
-    30: {
-      type: 'reward_unlock',
-      question: '🎊 تهانينا!\n\nادخل مفتاح المكافأة النهائي:',
-      hint: 'المكافأة تنتظرك!',
-      generate: (seed) => {
-        const rewardKey = crypto.createHash('sha256').update(seed + 'REWARD').digest('hex').substring(0, 12).toUpperCase();
-        return { question: `مفتاح المكافأة: ${rewardKey}`, rewardKey };
-      },
-      validate: (answer, data, seed) => {
-        if (answer.toUpperCase() === data.rewardKey) {
-          return { valid: true, nextKey: 'COMPLETE', partialKey: '🎉', isReward: true };
-        }
-        return { valid: false, message: `المفتاح الصحيح: ${data.rewardKey}` };
-      }
+// Regular puzzle types for levels 1-20
+const PUZZLE_TYPES = [
+  // Levels 1-5: Easy - Basic math and patterns
+  {
+    type: 'sequence',
+    generate: (seed) => {
+      const start = 2 + (seed % 10);
+      const diff = 3 + (seed % 5);
+      const sequence = Array.from({length: 5}, (_, i) => start + i * diff);
+      return {
+        question: `ما هو الرقم التالي في المتسلسلة؟
+
+${sequence.slice(0, 4).join(', ')}, ...`,
+        answer: sequence[4].toString(),
+        hint: `الفرق بين كل رقمين هو ${diff}`
+      };
     }
+  },
+  {
+    type: 'reverse',
+    generate: (seed) => {
+      const words = ['crypto', 'blockchain', 'bitcoin', 'ethereum', 'wallet'];
+      const word = words[seed % words.length];
+      return {
+        question: `ما هو عكس الكلمة: ${word.split('').reverse().join('')}`,
+        answer: word,
+        hint: 'اقلب الحروف'
+      };
+    }
+  },
+  {
+    type: 'sum',
+    generate: (seed) => {
+      const a = 10 + (seed % 20);
+      const b = 5 + (seed % 15);
+      return {
+        question: `احسب: ${a} + ${b} × 2`,
+        answer: (a + b * 2).toString(),
+        hint: 'تذكر أولوية العمليات (ضرب قبل جمع)'
+      };
+    }
+  },
+  {
+    type: 'binary',
+    generate: (seed) => {
+      const num = 5 + (seed % 20);
+      return {
+        question: `حوّل الرقم ${num} إلى نظام ثنائي (binary)`,
+        answer: num.toString(2),
+        hint: 'قسمة متكررة على 2'
+      };
+    }
+  },
+  {
+    type: 'prime',
+    generate: (seed) => {
+      const primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43];
+      const idx = seed % (primes.length - 2);
+      return {
+        question: `ما هو العدد الأولي التالي لـ ${primes[idx]}؟`,
+        answer: primes[idx + 1].toString(),
+        hint: 'العدد الأولي لا يقبل القسمة إلا على 1 ونفسه'
+      };
+    }
+  },
+  // Levels 6-10: Medium - Ciphers and logic
+  {
+    type: 'caesar',
+    generate: (seed) => {
+      const shift = 3;
+      const words = ['PUZZLE', 'CRYPTO', 'SECRET', 'HIDDEN', 'MASTER'];
+      const word = words[seed % words.length];
+      const encrypted = word.split('').map(c => 
+        String.fromCharCode((c.charCodeAt(0) - 65 + shift) % 26 + 65)
+      ).join('');
+      return {
+        question: `فك شيفرة قيصر (Caesar Cipher) مع إزاحة ${shift}:
+
+${encrypted}`,
+        answer: word,
+        hint: `أزل ${shift} من كل حرف`
+      };
+    }
+  },
+  {
+    type: 'xor',
+    generate: (seed) => {
+      const key = 5;
+      const chars = ['A', 'B', 'C', 'D', 'E'];
+      const selected = chars[seed % chars.length];
+      const encrypted = String.fromCharCode(selected.charCodeAt(0) ^ key);
+      return {
+        question: `فك عملية XOR:
+
+${encrypted} XOR ${key} = ?`,
+        answer: selected,
+        hint: 'XOR مع نفس المفتاح يُرجع الأصل'
+      };
+    }
+  },
+  {
+    type: 'hash',
+    generate: (seed) => {
+      const inputs = ['hello', 'crypto', 'puzzle', 'secret', 'master'];
+      const input = inputs[seed % inputs.length];
+      const hash = crypto.createHash('md5').update(input).digest('hex').substring(0, 8);
+      return {
+        question: `ما المدخل الذي يعطي هذا الـ MD5 Hash؟
+
+${hash}`,
+        answer: input,
+        hint: 'كلمات إنجليزية شائعة'
+      };
+    }
+  },
+  {
+    type: 'pattern',
+    generate: (seed) => {
+      const patterns = [
+        { arr: [1, 1, 2, 3, 5], ans: '8', hint: 'فيبوناتشي' },
+        { arr: [2, 4, 8, 16], ans: '32', hint: 'مضاعفات 2' },
+        { arr: [1, 4, 9, 16], ans: '25', hint: 'مربعات كاملة' },
+        { arr: [1, 8, 27, 64], ans: '125', hint: 'مكعبات' },
+        { arr: [3, 6, 9, 12], ans: '15', hint: 'مضاعفات 3' }
+      ];
+      const p = patterns[seed % patterns.length];
+      return {
+        question: `ما الرقم التالي؟
+
+${p.arr.join(', ')}, ...`,
+        answer: p.ans,
+        hint: p.hint
+      };
+    }
+  },
+  {
+    type: 'base64',
+    generate: (seed) => {
+      const words = ['data', 'code', 'key', 'hash', 'bit'];
+      const word = words[seed % words.length];
+      const encoded = Buffer.from(word).toString('base64');
+      return {
+        question: `فك ترميز Base64:
+
+${encoded}`,
+        answer: word,
+        hint: 'استخدم Base64 decoder'
+      };
+    }
+  },
+  // Levels 11-15: Hard - Cryptography
+  {
+    type: 'rsa',
+    generate: (seed) => {
+      const p = 7, q = 11, e = 3;
+      const n = p * q;
+      const phi = (p - 1) * (q - 1);
+      const msg = 5 + (seed % 10);
+      const encrypted = Math.pow(msg, e) % n;
+      return {
+        question: `RSA Simple:
+
+p = ${p}, q = ${q}, e = ${e}
+الرسالة المشفرة: ${encrypted}
+
+أوجد الرسالة الأصلية (msg)`,
+        answer: msg.toString(),
+        hint: `n = p×q = ${n}, φ = (p-1)(q-1) = ${phi}`
+      };
+    }
+  },
+  {
+    type: 'hex',
+    generate: (seed) => {
+      const num = 100 + (seed % 200);
+      return {
+        question: `حوّل من عشري إلى سداسي عشري (Hex):
+
+${num}`,
+        answer: num.toString(16).toUpperCase(),
+        hint: 'قسمة متكررة على 16'
+      };
+    }
+  },
+  {
+    type: 'ascii',
+    generate: (seed) => {
+      const codes = [72, 69, 76, 76, 79]; // HELLO
+      const offset = seed % 5;
+      const shifted = codes.map(c => c + offset);
+      return {
+        question: `حوّل أكواد ASCII إلى نص:
+
+${shifted.join(', ')}`,
+        answer: String.fromCharCode(...shifted),
+        hint: 'اربط كل رقم بحرف'
+      };
+    }
+  },
+  {
+    type: 'vigenere',
+    generate: (seed) => {
+      const key = 'KEY';
+      const plaintext = 'HELLO';
+      const encrypted = plaintext.split('').map((c, i) => 
+        String.fromCharCode((c.charCodeAt(0) - 65 + key.charCodeAt(i % key.length) - 65) % 26 + 65)
+      ).join('');
+      return {
+        question: `فك شيفرة فيجينير (Vigenère):
+
+المفتاح: ${key}
+النص المشفر: ${encrypted}`,
+        answer: plaintext,
+        hint: 'اطرح المفتاح من النص'
+      };
+    }
+  },
+  {
+    type: 'morse',
+    generate: (seed) => {
+      const morseCode = { 'S': '...', 'O': '---', 'H': '....', 'E': '.', 'T': '-', 'A': '.-', 'N': '-.' };
+      const words = ['SOS', 'HELLO', 'TEST', 'CODE', 'NODE'];
+      const word = words[seed % words.length];
+      const encoded = word.split('').map(c => morseCode[c] || '').join(' ');
+      return {
+        question: `فك شيفرة مورس:
+
+${encoded}`,
+        answer: word,
+        hint: 'نقاط وشرط'
+      };
+    }
+  },
+  // Levels 16-20: Very Hard - Multi-step
+  {
+    type: 'sha256',
+    generate: (seed) => {
+      const inputs = ['admin', 'user', 'root', 'test', 'pass'];
+      const input = inputs[seed % inputs.length];
+      const prefix = crypto.createHash('sha256').update(input).digest('hex').substring(0, 8);
+      return {
+        question: `ما المدخل الذي يبدأ بهذا SHA256؟
+
+${prefix}...`,
+        answer: input,
+        hint: 'كلمات إنجليزية شائعة'
+      };
+    }
+  },
+  {
+    type: 'aes',
+    generate: (seed) => {
+      const key = 'KEY';
+      const iv = 'IV';
+      const plaintext = 'SECRET';
+      const cipher = crypto.createCipheriv('aes-128-cbc', Buffer.from(key.padEnd(16, '0')), Buffer.from(iv.padEnd(16, '0')));
+      let encrypted = cipher.update(plaintext, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      return {
+        question: `فك تشفير AES-128-CBC:
+
+المفتاح: ${key}
+IV: ${iv}
+النص المشفر: ${encrypted.substring(0, 16)}...`,
+        answer: plaintext,
+        hint: 'استخدم مفتاح AES'
+      };
+    }
+  },
+  {
+    type: 'doubleHash',
+    generate: (seed) => {
+      const inputs = ['hash', 'data', 'file', 'byte', 'word'];
+      const input = inputs[seed % inputs.length];
+      const double = crypto.createHash('sha256').update(crypto.createHash('sha256').update(input).digest('hex')).digest('hex').substring(0, 8);
+      return {
+        question: `ما المدخل الذي يعطي هذا الـ Double SHA256؟
+
+${double}...`,
+        answer: input,
+        hint: 'SHA256(SHA256(input))'
+      };
+    }
+  },
+  {
+    type: 'base58',
+    generate: (seed) => {
+      const base58Chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+      const input = '1' + base58Chars[seed % base58Chars.length];
+      const hash = crypto.createHash('sha256').update(input).digest('hex').substring(0, 8);
+      return {
+        question: `ما الحرف الناقص في Base58؟
+
+النص: 1?
+Hash يبدأ بـ: ${hash}`,
+        answer: base58Chars[seed % base58Chars.length],
+        hint: 'أحرف Base58 (بدون 0, O, I, l)'
+      };
+    }
+  },
+  {
+    type: 'merkle',
+    generate: (seed) => {
+      const left = 'A';
+      const right = 'B';
+      const combined = crypto.createHash('sha256').update(left + right).digest('hex').substring(0, 8);
+      return {
+        question: `أنشئ Merkle Root:
+
+البيانات: [A, B]
+Hash(A + B) = ?`,
+        answer: combined,
+        hint: 'اربط A و B ثم哈希'
+      };
+    }
+  }
+];
+
+// Generate question for a specific level
+function generateQuestion(level, seed, userId = null, history = {}) {
+  // For epic levels (21-30), use the epic puzzle system
+  if (level >= 21 && level <= 30) {
+    return generateEpicPuzzle(level, seed, userId, history);
+  }
+  
+  // For regular levels (1-20)
+  const puzzleIndex = (level - 1) % PUZZLE_TYPES.length;
+  const puzzle = PUZZLE_TYPES[puzzleIndex];
+  
+  const data = puzzle.generate(seed);
+  
+  return {
+    level,
+    type: puzzle.type,
+    question: data.question,
+    hint: data.hint,
+    answer: data.answer,
+    difficulty: level <= 5 ? 'easy' : level <= 10 ? 'medium' : level <= 15 ? 'hard' : 'very_hard'
   };
-  return questions[level] || null;
 }
 
-module.exports = { generateSeed, generateQuestion, TOTAL_LEVELS: 30 };
+// Validate answer
+function validateAnswer(answer, level, seed, history = {}) {
+  // For epic levels
+  if (level >= 21 && level <= 30) {
+    const x1 = 17 + (level * 3) + (seed % 10);
+    const x2 = 31 + (level * 5) + (seed % 15);
+    const k = `MATH${level}`;
+    const paths = ['A', 'B', 'C', 'D'];
+    const path = paths[level % 4];
+    const r1 = 23 + level;
+    const r2 = 47 + level * 2;
+    const r3 = 59 + level * 3;
+    
+    return validateEpicAnswer(answer, level, { x1, x2, k, path, r1, r2, r3 });
+  }
+  
+  // For regular levels
+  const puzzleIndex = (level - 1) % PUZZLE_TYPES.length;
+  const puzzle = PUZZLE_TYPES[puzzleIndex];
+  const data = puzzle.generate(seed);
+  
+  const userAnswer = answer.toString().trim().toLowerCase();
+  const correctAnswer = data.answer.toLowerCase();
+  
+  if (userAnswer === correctAnswer) {
+    const isFinal = level === 30;
+    return {
+      valid: true,
+      correct: true,
+      isFinal,
+      isReward: isFinal,
+      nextKey: isFinal ? 'EPIC_SOLVER_' + Date.now() : null,
+      message: isFinal ? '🎉 تهانينا! أكملت اللعبة!' : 'إجابة صحيحة!'
+    };
+  }
+  
+  return {
+    valid: false,
+    correct: false,
+    message: 'إجابة خاطئة. حاول مرة أخرى.'
+  };
+}
+
+// Get total levels
+const TOTAL_LEVELS = 30;
+
+module.exports = {
+  generateSeed,
+  generateQuestion,
+  validateAnswer,
+  getEpicPuzzles,
+  TOTAL_LEVELS,
+  PUZZLE_TYPES
+};
