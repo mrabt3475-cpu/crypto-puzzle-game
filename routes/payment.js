@@ -1,11 +1,11 @@
 /**
- * Payment Routes - Level-based payment with Binance
+ * Payment Routes - Level-based payment with REAL Binance API
  */
 
 const express = require('express');
 const { Payment, getLevelPrice, requiresPayment, getPaidLevels } = require('../models/Payment');
 const BinancePayment = require('../utils/binancePayment');
-const { rateLimiter, validateInput, securityLog } = require('../middleware/securityAdvanced');
+const { rateLimiter, securityLog } = require('../middleware/securityAdvanced');
 
 const router = express.Router();
 const paymentSystem = new Payment();
@@ -29,7 +29,8 @@ router.get('/price/:level', (req, res) => {
       price: pricing.price,
       currency: pricing.currency,
       requiresPayment: pricing.price > 0,
-      network: binancePayment.network
+      network: binancePayment.network,
+      apiConfigured: binancePayment.isApiConfigured()
     });
     
   } catch (error) {
@@ -58,7 +59,8 @@ router.get('/pricing', (req, res) => {
         paidLevels: 27,
         totalPrice: total,
         currency: 'USDT'
-      }
+      },
+      apiConfigured: binancePayment.isApiConfigured()
     });
     
   } catch (error) {
@@ -109,7 +111,7 @@ router.post('/create', rateLimiter, async (req, res) => {
       const invoice = await binancePayment.createInvoice(userId, levelNum);
       return res.json({
         success: true,
-        message: 'دفع_pending موجود',
+        message: 'دفع pending موجود',
         invoice,
         existingPayment: {
           paymentId: existingPayment.paymentId,
@@ -123,22 +125,31 @@ router.post('/create', rateLimiter, async (req, res) => {
     const pricing = getLevelPrice(levelNum);
     const payment = paymentSystem.createPayment(userId, levelNum, pricing.price, pricing.currency);
     
-    // Generate invoice
+    // Generate invoice with REAL Binance API
     const invoice = await binancePayment.createInvoice(userId, levelNum);
     invoice.paymentId = payment.paymentId;
     
-    securityLog('payment_created', { userId, level: levelNum, amount: pricing.price });
+    securityLog('payment_created', { 
+      userId, 
+      level: levelNum, 
+      amount: pricing.price,
+      isDemo: invoice.isDemo 
+    });
     
     res.json({
       success: true,
-      message: 'تم إنشاء الفاتورة!',
+      message: invoice.isDemo 
+        ? '⚠️ وضع تجريبي - أضف مفاتيح API في .env للتشغيل الحقيقي'
+        : '✅ تم إنشاء الفاتورة!',
       invoice,
       payment: {
         paymentId: payment.paymentId,
         amount: payment.amount,
         currency: payment.currency,
         expiresAt: payment.expiresAt
-      }
+      },
+      apiConfigured: binancePayment.isApiConfigured(),
+      isDemo: invoice.isDemo
     });
     
   } catch (error) {
@@ -175,7 +186,7 @@ router.post('/verify', rateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Payment expired. Please create new payment.' });
     }
     
-    // Verify with Binance
+    // Verify with REAL Binance API
     const verification = await binancePayment.verifyPayment({
       txHash,
       amount: payment.amount,
@@ -190,20 +201,25 @@ router.post('/verify', rateLimiter, async (req, res) => {
         userId: payment.userId, 
         level: payment.level, 
         amount: payment.amount,
-        txHash 
+        txHash,
+        isDemo: verification.isDemo || false
       });
       
       res.json({
         success: true,
-        message: '✅ تم تأكيد الدفع!',
+        message: verification.isDemo 
+          ? '✅ تم تأكيد الدفع (تجريبي)!' 
+          : '✅ تم تأكيد الدفع على Binance!',
         payment: {
           paymentId,
           status: 'CONFIRMED',
           level: payment.level,
           amount: payment.amount,
           txHash,
-          confirmedAt: verification.confirmedAt
-        }
+          confirmedAt: verification.confirmedAt,
+          confirmations: verification.confirmations
+        },
+        isDemo: verification.isDemo || false
       });
     } else {
       paymentSystem.updatePaymentStatus(paymentId, 'FAILED');
@@ -357,7 +373,8 @@ router.get('/wallet', (req, res) => {
       success: true,
       wallet,
       supportedNetworks: networks,
-      currency: 'USDT'
+      currency: 'USDT',
+      apiConfigured: binancePayment.isApiConfigured()
     });
     
   } catch (error) {
@@ -371,8 +388,9 @@ router.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     service: 'Payment System',
-    version: '1.0',
+    version: '2.0',
     network: binancePayment.network,
+    apiConfigured: binancePayment.isApiConfigured(),
     supportedNetworks: binancePayment.getSupportedNetworks().map(n => n.id)
   });
 });
