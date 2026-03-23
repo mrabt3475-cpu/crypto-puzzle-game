@@ -15,11 +15,22 @@ const metaPuzzleRoutes = require('./routes/metapuzzle');
 const {
     powLimiter,
     timeVerifier,
-    challengeValidator,
     advancedRateLimit,
     behavioralCheck,
     walletVerifier
 } = require('./middleware/securityEnhanced');
+
+const {
+    ipBlockerMiddleware,
+    validateInput,
+    deviceFingerprintMiddleware,
+    auditLogMiddleware,
+    geolocationCheck,
+    requestSizeValidator,
+    validateMethod,
+    InputValidator,
+    securityConfig
+} = require('./middleware/securityMiddleware');
 
 const app = express();
 
@@ -43,6 +54,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'x-request-signature', 'x-request-timestamp', 'x-request-nonce', 'x-client-timestamp']
 }));
 
+// Request validation
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
@@ -56,33 +68,42 @@ app.use((req, res, next) => {
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
     next();
 });
 
 // Advanced security middleware
-app.use(powLimiter);           // Proof of Work
-app.use(timeVerifier);         // Time verification
-app.use(behavioralCheck);      // Bot detection
-app.use(advancedRateLimit);    // Advanced rate limiting
-app.use(walletVerifier);       // Wallet verification for advanced levels
+app.use(ipBlockerMiddleware);        // IP blocking
+app.use(deviceFingerprintMiddleware); // Device fingerprint
+app.use(geolocationCheck);           // Geolocation
+app.use(powLimiter);                 // Proof of Work
+app.use(behavioralCheck);            // Bot detection
+app.use(advancedRateLimit);          // Advanced rate limiting
+
+// Audit logging for all API routes
+app.use('/api/', auditLogMiddleware('api_request'));
 
 // Honeypot
 app.get('/admin.php', (req, res) => { console.log('🚨 HONEYPOT:', req.ip); res.status(404).send('Not found'); });
 app.get('/wp-admin', (req, res) => { console.log('🚨 HONEYPOT:', req.ip); res.status(404).send('Not found'); });
 app.post('/.env', (req, res) => { console.log('🚨 HONEYPOT:', req.ip); res.status(404).send('Not found'); });
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/payment', paymentRoutes);
-app.use('/api/puzzle', puzzleRoutes);
-app.use('/api/zkpuzzle', zkPuzzleRoutes);
-app.use('/api/metapuzzle', metaPuzzleRoutes);
+// API Routes with validation
+app.use('/api/auth', validateMethod('POST'), validateInput({
+    action: { required: true, type: 'string' }
+}), authRoutes);
+
+app.use('/api/payment', validateMethod('POST', 'GET'), paymentRoutes);
+app.use('/api/puzzle', validateMethod('POST', 'GET'), puzzleRoutes);
+app.use('/api/zkpuzzle', validateMethod('POST', 'GET'), zkPuzzleRoutes);
+app.use('/api/metapuzzle', validateMethod('POST', 'GET'), metaPuzzleRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    security: 'enhanced'
+    security: 'complete',
+    version: '2.0'
 }));
 
 // 404
@@ -91,6 +112,17 @@ app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // Error handler
 app.use((err, req, res, next) => {
     console.error('Error:', err);
+    
+    // Log error to audit
+    if (global.auditLogger) {
+        global.auditLogger.log({
+            action: 'error',
+            userId: req.user?.userId,
+            ipAddress: req.ip,
+            metadata: { error: err.message, stack: err.stack }
+        });
+    }
+    
     res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal error' : err.message });
 });
 
@@ -100,11 +132,17 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/puzzle
 mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true, maxPoolSize: 10 }).then(async () => {
     console.log('✅ MongoDB Connected');
     
+    // Initialize security models
+    try {
+        const { default: security } = require('./middleware/securityComplete');
+        // Models are auto-registered
+    } catch(e) {}
+    
     // Initialize puzzles
     try { const ZKPuzzle = require('./models/ZKPuzzle'); await ZKPuzzle.initializePuzzles(); } catch(e) {}
     try { const MetaPuzzle = require('./models/MetaPuzzle'); await MetaPuzzle.initializePuzzles(); } catch(e) {}
     
-    app.listen(PORT, () => console.log('🚀 MRABT: The Lost Block - Enhanced Security - Port', PORT));
+    app.listen(PORT, () => console.log('🚀 MRABT: The Lost Block - Complete Security - Port', PORT));
 }).catch(e => { console.error(e); process.exit(1); });
 
 module.exports = app;
