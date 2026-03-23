@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const { securityHeaders } = require('./middleware/securityAdvanced');
 const puzzlesDynamic = require('./routes/puzzles_dynamic');
+const paymentRoutes = require('./routes/payment');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,20 +33,32 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/puzzle', puzzlesDynamic);
+app.use('/api/payment', paymentRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
     name: 'Crypto Puzzle Game API',
     version: '2.0',
-    description: '30-level dynamic puzzle game with crypto challenges',
+    description: '30-level dynamic puzzle game with crypto payments',
     endpoints: {
+      // Puzzle endpoints
       start: 'POST /api/puzzle/start',
       question: 'GET /api/puzzle/question/:level',
       answer: 'POST /api/puzzle/answer',
       progress: 'GET /api/puzzle/progress',
       hint: 'GET /api/puzzle/hint/:level',
-      health: 'GET /api/puzzle/health'
+      health: 'GET /api/puzzle/health',
+      // Payment endpoints
+      price: 'GET /api/payment/price/:level',
+      pricing: 'GET /api/payment/pricing',
+      createPayment: 'POST /api/payment/create',
+      verifyPayment: 'POST /api/payment/verify',
+      paymentStatus: 'GET /api/payment/status/:paymentId',
+      userPayments: 'GET /api/payment/user/:userId',
+      checkAccess: 'GET /api/payment/check/:userId/:level',
+      wallet: 'GET /api/payment/wallet',
+      paymentHealth: 'GET /api/payment/health'
     }
   });
 });
@@ -65,6 +78,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Crypto Puzzle Game API running on port ${PORT}`);
   console.log(`📚 30 dynamic puzzle levels loaded`);
+  console.log(`💰 Payment system active (Binance/USDT)`);
   console.log(`🔐 Security middleware active`);
 });
 
