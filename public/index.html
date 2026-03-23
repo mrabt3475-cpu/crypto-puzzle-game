@@ -10,12 +10,9 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Header -->
         <header class="game-header">
             <div class="logo-section">
-                <div class="logo-icon">
-                    <i class="fas fa-gem"></i>
-                </div>
+                <div class="logo-icon"><i class="fas fa-gem"></i></div>
                 <h1>Crypto Puzzle</h1>
             </div>
             <div class="user-info">
@@ -24,15 +21,11 @@
                     <span id="balance">0.00</span>
                     <span class="currency">USDT</span>
                 </div>
-                <div class="user-avatar" id="userAvatar">
-                    <i class="fas fa-user"></i>
-                </div>
+                <div class="user-avatar" id="userAvatar"><i class="fas fa-user"></i></div>
             </div>
         </header>
 
-        <!-- Main Content -->
         <main class="game-main">
-            <!-- Auth Section -->
             <section id="authSection" class="auth-section">
                 <div class="auth-card">
                     <div class="auth-header">
@@ -52,140 +45,83 @@
                             <label><i class="fas fa-lock"></i> كلمة المرور</label>
                             <div class="password-input">
                                 <input type="password" id="passwordInput" placeholder="أدخل كلمة المرور" required>
-                                <button type="button" class="toggle-password">
-                                    <i class="fas fa-eye"></i>
-                                </button>
+                                <button type="button" class="toggle-password"><i class="fas fa-eye"></i></button>
                             </div>
                         </div>
-                        <button type="submit" class="btn-primary">
-                            <span>دخول</span>
-                            <i class="fas fa-arrow-left"></i>
-                        </button>
+                        <button type="submit" class="btn-primary"><span>دخول</span><i class="fas fa-arrow-left"></i></button>
                     </form>
-                    <div class="auth-divider">
-                        <span>أو</span>
-                    </div>
-                    <button class="btn-social">
-                        <i class="fab fa-google"></i>
-                        <span>متابعة عبر Google</span>
-                    </button>
+                    <div class="auth-divider"><span>أو</span></div>
+                    <button class="btn-social"><i class="fab fa-google"></i><span>تسجيل عبر Google</span></button>
                 </div>
             </section>
 
-            <!-- Game Section -->
             <section id="gameSection" class="game-section" style="display: none;">
-                <!-- Progress Bar -->
+                <div class="competition-banner">
+                    <div class="prize-info">
+                        <i class="fas fa-trophy"></i>
+                        <span class="prize-label">الجائزة الكبرى</span>
+                        <span class="prize-amount">1000$ USDT</span>
+                    </div>
+                    <div class="winner-info">
+                        <span class="winner-text">🎯 الفائز الأول يحصل على الجائزة كاملة!</span>
+                    </div>
+                </div>
+
                 <div class="progress-container">
                     <div class="progress-info">
-                        <span class="level-badge">
-                            <i class="fas fa-layer-group"></i>
-                            المستوى <span id="currentLevel">1</span>/20
-                        </span>
-                        <span class="points-badge">
-                            <i class="fas fa-star"></i>
-                            <span id="totalPoints">0</span> نقطة
-                        </span>
+                        <span class="level-badge"><i class="fas fa-layer-group"></i> المستوى <span id="currentLevel">1</span>/20</span>
+                        <span class="points-badge"><i class="fas fa-star"></i><span id="totalPoints">0</span> نقطة</span>
                     </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
+                    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
                 </div>
 
-                <!-- Puzzle Card -->
                 <div class="puzzle-card">
                     <div class="puzzle-header">
-                        <div class="puzzle-type">
-                            <i class="fas fa-puzzle-piece"></i>
-                            <span id="puzzleType">لغز تشفير</span>
-                        </div>
-                        <div class="puzzle-hint">
-                            <i class="fas fa-lightbulb"></i>
-                            <span>تلميح</span>
-                        </div>
+                        <div class="puzzle-type"><i class="fas fa-puzzle-piece"></i><span id="puzzleType">أحجية</span></div>
+                        <div class="puzzle-hint"><i class="fas fa-lightbulb"></i><span>تلميح</span></div>
                     </div>
-                    
-                    <div class="puzzle-content">
-                        <div class="puzzle-question" id="puzzleQuestion">
-                            <!-- Puzzle content will be loaded here -->
-                        </div>
-                        
-                        <div class="puzzle-input-area">
-                            <input type="text" 
-                                   id="answerInput" 
-                                   class="answer-input" 
-                                   placeholder="أدخل إجابتك..."
-                                   autocomplete="off">
-                            <button class="btn-submit" id="submitBtn">
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
-                        </div>
+                    <div class="puzzle-content"><div class="puzzle-question" id="puzzleQuestion"></div></div>
+                    <div class="puzzle-input-area">
+                        <input type="text" id="answerInput" class="answer-input" placeholder="أدخل الإجابة..." autocomplete="off">
+                        <button class="btn-submit" id="submitBtn"><i class="fas fa-paper-plane"></i></button>
                     </div>
-
                     <div class="puzzle-footer">
-                        <div class="attempts-info">
-                            <i class="fas fa-heart"></i>
-                            <span>المحاولات: <strong id="attempts">3</strong></span>
-                        </div>
-                        <div class="time-info">
-                            <i class="fas fa-clock"></i>
-                            <span>الوقت: <strong id="timer">∞</strong></span>
-                        </div>
+                        <div class="attempts-info"><i class="fas fa-heart"></i><span>المحاولات: <strong id="attempts">3</strong></span></div>
+                        <div class="time-info"><i class="fas fa-clock"></i><span>الوقت: <strong id="timer">00:00</strong></span></div>
                     </div>
                 </div>
 
-                <!-- Hint Modal -->
                 <div class="hint-modal" id="hintModal">
                     <div class="modal-content">
-                        <button class="close-modal">×</button>
-                        <h3>💡 التلميح</h3>
+                        <button class="close-modal">✖</button>
+                        <h3>💡 تلميح</h3>
                         <p id="hintText">...</p>
-                        <div class="hint-cost">
-                            <i class="fas fa-coins"></i>
-                            <span>التكلفة: 5 نقاط</span>
-                        </div>
+                        <div class="hint-cost"><i class="fas fa-coins"></i><span>التكلفة: 5 نقاط</span></div>
                         <button class="btn-hint">استخدام التلميح</button>
                     </div>
                 </div>
             </section>
 
-            <!-- Leaderboard Section -->
             <section id="leaderboardSection" class="leaderboard-section" style="display: none;">
                 <div class="leaderboard-card">
                     <div class="leaderboard-header">
-                        <h2>🏆排行榜</h2>
-                        <p>أفضل اللاعبين</p>
+                        <h2>🏆 لوحة المتصدرين</h2>
+                        <p>نافس الآخرين واربح!</p>
                     </div>
-                    <div class="leaderboard-list" id="leaderboardList">
-                        <!-- Leaderboard items will be loaded here -->
-                    </div>
+                    <div class="leaderboard-list" id="leaderboardList"></div>
                 </div>
             </section>
         </main>
 
-        <!-- Navigation -->
         <nav class="game-nav">
-            <button class="nav-btn active" data-page="game">
-                <i class="fas fa-gamepad"></i>
-                <span>اللعبة</span>
-            </button>
-            <button class="nav-btn" data-page="leaderboard">
-                <i class="fas fa-trophy"></i>
-                <span>الترتيب</span>
-            </button>
-            <button class="nav-btn" data-page="wallet">
-                <i class="fas fa-wallet"></i>
-                <span>المحفظة</span>
-            </button>
-            <button class="nav-btn" data-page="profile">
-                <i class="fas fa-user-cog"></i>
-                <span>الإعدادات</span>
-            </button>
+            <button class="nav-btn active" data-page="game"><i class="fas fa-gamepad"></i><span>اللعبة</span></button>
+            <button class="nav-btn" data-page="leaderboard"><i class="fas fa-trophy"></i><span>الترتيب</span></button>
+            <button class="nav-btn" data-page="wallet"><i class="fas fa-wallet"></i><span>المحفظة</span></button>
+            <button class="nav-btn" data-page="profile"><i class="fas fa-user-cog"></i><span>الملف</span></button>
         </nav>
 
-        <!-- Message Toast -->
         <div class="toast-container" id="toastContainer"></div>
     </div>
-
     <script src="js/app.js"></script>
 </body>
 </html>
