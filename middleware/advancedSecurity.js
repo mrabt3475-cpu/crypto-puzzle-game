@@ -1,277 +1,322 @@
 /**
- * 🛡️ Advanced Security Middleware
- * طبقة حماية متقدمة
+ * 🛡️ Advanced Security Layer
+ * - Wallet Binding
+ * - Proof of Work
+ * - Time Oracle
+ * - Encrypted Challenges
  */
 
 const crypto = require('crypto');
-const rateLimit = require('express-rate-limit');
-const { v4: uuidv4 } = require('uuid');
+const mongoose = require('mongoose');
 
-// Store for security data (use Redis in production)
-const securityStore = new Map();
+// ============== 1. Wallet Binding Schema ==============
+const walletBindingSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    walletAddress: { type: String, required: true },
+    walletType: { type: String, enum: ['ton', 'eth', 'btc'], default: 'ton' },
+    verifiedAt: { type: Date, default: Date.now },
+    balance: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true }
+}, { timestamps: true });
 
-// ============== 1. Device Fingerprinting ==============
+walletBindingSchema.index({ userId: 1 }, { unique: true });
 
-function generateDeviceFingerprint(req) {
-    const components = [
-        req.headers['user-agent'],
-        req.headers['accept-language'],
-        req.headers['accept-encoding'],
-        req.ip,
-        req.headers['sec-ch-ua-platform'],
-        req.headers['sec-ch-ua-mobile']
-    ];
-    
-    const fingerprint = crypto
-        .createHash('sha256')
-        .update(components.join('|'))
-        .digest('hex');
-    
-    return fingerprint;
-}
-
-// ============== 2. Advanced Rate Limiting ==============
-
-const puzzleAttemptLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute
-    max: 5, // 5 attempts per minute
-    message: { error: 'Too many attempts. Please wait.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-    handler: (req, res) => {
-        logSuspiciousActivity(req.user?.userId || req.ip, 'rate_limit_exceeded', {
-            path: req.path,
-            attempts: 5
-        });
-        res.status(429).json({ error: 'Too many attempts. Please wait.' });
-    }
-});
-
-const progressiveDelayLimiter = (req, res, next) => {
-    const userId = req.user?.userId || req.ip;
-    const key = `delay:${userId}`;
-    
-    let delayData = securityStore.get(key) || { attempts: 0, lastAttempt: 0 };
-    
-    // Reset after 5 minutes of no attempts
-    if (Date.now() - delayData.lastAttempt > 5 * 60 * 1000) {
-        delayData = { attempts: 0, lastAttempt: 0 };
-    }
-    
-    delayData.attempts++;
-    delayData.lastAttempt = Date.now();
-    
-    // Progressive delay: 1s, 2s, 4s, 8s, 16s...
-    const delay = Math.min(30000, Math.pow(2, delayData.attempts - 1) * 1000);
-    
-    if (delayData.attempts > 3) {
-        securityStore.set(key, delayData);
+// ============== 2. Proof of Work System ==============
+class ProofOfWork {
+    static generateChallenge(difficulty = 20) {
+        const seed = crypto.randomBytes(16).toString('hex');
+        const target = '0'.repeat(Math.floor(difficulty / 4));
         
-        // Add delay to response
-        setTimeout(next, delay);
-    } else {
-        securityStore.set(key, delayData);
-        next();
+        return {
+            seed,
+            difficulty,
+            target,
+            prefix: seed.substring(0, 8)
+        };
     }
-};
-
-// ============== 3. Request Signing ==============
-
-const REQUEST_SIGNATURE_SECRET = process.env.REQUEST_SIGNATURE_SECRET || 'default-secret-change-me';
-
-function signRequest(req) {
-    const timestamp = Date.now();
-    const nonce = uuidv4();
-    const payload = JSON.stringify(req.body || {});
     
-    const signature = crypto
-        .createHmac('sha256', REQUEST_SIGNATURE_SECRET)
-        .update(`${req.method}:${req.originalUrl}:${timestamp}:${nonce}:${payload}`)
-        .digest('hex');
+    static verify(solution, challenge) {
+        const hash = crypto.createHash('sha256')
+            .update(challenge.seed + solution)
+            .digest('hex');
+        
+        const difficulty = challenge.difficulty;
+        const requiredZeros = Math.floor(difficulty / 4);
+        
+        return hash.startsWith('0'.repeat(requiredZeros));
+    }
     
-    return {
-        timestamp,
-        nonce,
-        signature,
-        headers: {
-            'x-request-timestamp': timestamp,
-            'x-request-nonce': nonce,
-            'x-request-signature': signature
-        }
-    };
+    static estimateTime(difficulty) {
+        // Estimate time in seconds based on difficulty
+        const hashesPerSecond = 1000000; // 1M H/s (GPU)
+        const target = Math.pow(16, Math.floor(difficulty / 4));
+        const totalHashes = target;
+        return totalHashes / hashesPerSecond;
+    }
 }
 
-function verifyRequestSignature(req, res, next) {
-    // Skip for some paths
-    if (req.path === '/health' || req.path === '/api/payment/webhook') {
-        return next();
+// ============== 3. Time Oracle ==============
+class TimeOracle {
+    constructor() {
+        this.approvedTimeSources = [
+            'https://worldtimeapi.org/api/timezone/UTC',
+            'https://timeapi.io/api/Time/current/zone?timeZone=UTC'
+        ];
+        this.cache = null;
+        this.lastFetch = 0;
+        this.cacheDuration = 60000; // 1 minute
     }
     
-    const timestamp = req.headers['x-request-timestamp'];
-    const nonce = req.headers['x-request-nonce'];
-    const signature = req.headers['x-request-signature'];
-    
-    // Check timestamp (request must be within 5 minutes)
-    if (!timestamp || !nonce || !signature) {
-        return res.status(401).json({ error: 'Missing security headers' });
+    async getTime() {
+        // Return cached time if recent
+        if (this.cache && (Date.now() - this.lastFetch) < this.cacheDuration) {
+            return this.cache;
+        }
+        
+        // In production, fetch from external API
+        // For now, use server time with verification
+        const serverTime = Date.now();
+        
+        // Add some entropy to prevent timing attacks
+        const timeWithJitter = serverTime + Math.floor(Math.random() * 100);
+        
+        this.cache = timeWithJitter;
+        this.lastFetch = Date.now();
+        
+        return timeWithJitter;
     }
     
-    if (Math.abs(Date.now() - parseInt(timestamp)) > 5 * 60 * 1000) {
-        return res.status(401).json({ error: 'Request expired' });
+    verifyTimestamp(timestamp, toleranceMs = 300000) { // 5 minutes tolerance
+        const now = Date.now();
+        return Math.abs(now - timestamp) < toleranceMs;
+    }
+}
+
+// ============== 4. Encrypted Challenge System ==============
+class EncryptedChallengeSystem {
+    constructor() {
+        this.encryptionKey = process.env.CHALLENGE_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
     }
     
-    // Check nonce (prevent replay attacks)
-    const nonceKey = `nonce:${nonce}`;
-    if (securityStore.has(nonceKey)) {
-        return res.status(401).json({ error: 'Request already used' });
+    encrypt(data) {
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(this.encryptionKey, 'hex'), iv);
+        
+        let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        
+        const authTag = cipher.getAuthTag();
+        
+        return {
+            encrypted,
+            iv: iv.toString('hex'),
+            authTag: authTag.toString('hex')
+        };
     }
     
-    // Verify signature
-    const payload = JSON.stringify(req.body || {});
-    const expectedSignature = crypto
-        .createHmac('sha256', REQUEST_SIGNATURE_SECRET)
-        .update(`${req.method}:${req.originalUrl}:${timestamp}:${nonce}:${payload}`)
-        .digest('hex');
+    decrypt(encryptedData) {
+        try {
+            const decipher = crypto.createDecipheriv(
+                'aes-256-gcm',
+                Buffer.from(this.encryptionKey, 'hex'),
+                Buffer.from(encryptedData.iv, 'hex')
+            );
+            
+            decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
+            
+            let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+            decrypted += decipher.final('utf8');
+            
+            return JSON.parse(decrypted);
+        } catch (e) {
+            return null;
+        }
+    }
     
-    if (signature !== expectedSignature) {
-        logSuspiciousActivity(req.user?.userId || req.ip, 'invalid_signature', {
-            path: req.path
+    generateSecureChallenge(userId, puzzleData) {
+        const challenge = {
+            userId,
+            puzzleData,
+            timestamp: Date.now(),
+            nonce: crypto.randomBytes(16).toString('hex'),
+            expiresAt: Date.now() + 300000 // 5 minutes
+        };
+        
+        return this.encrypt(challenge);
+    }
+}
+
+// ============== 5. Anti-Sybil System ==============
+class AntiSybilSystem {
+    constructor() {
+        this.userReputations = new Map();
+    }
+    
+    calculateReputation(userId, factors) {
+        let score = 0;
+        
+        // Wallet verified (+30)
+        if (factors.hasWallet) score += 30;
+        
+        // Telegram verified (+20)
+        if (factors.telegramVerified) score += 20;
+        
+        // Email verified (+10)
+        if (factors.emailVerified) score += 10;
+        
+        // Account age (+20 per month, max 60)
+        const accountAgeMonths = (Date.now() - factors.accountCreated) / (30 * 24 * 60 * 60 * 1000);
+        score += Math.min(60, Math.floor(accountAgeMonths * 20));
+        
+        // Previous puzzles solved (+2 per puzzle, max 40)
+        score += Math.min(40, factors.puzzlesSolved * 2);
+        
+        // No previous bans (+40)
+        if (!factors.hasBan) score += 40;
+        
+        return score;
+    }
+    
+    isTrusted(score, requiredLevel) {
+        const thresholds = {
+            'easy': 30,
+            'medium': 50,
+            'hard': 70,
+            'expert': 90,
+            'master': 120,
+            'legendary': 150
+        };
+        
+        return score >= (thresholds[requiredLevel] || 50);
+    }
+}
+
+// ============== 6. Rate Limiting with Burst Protection ==============
+class AdvancedRateLimiter {
+    constructor() {
+        this.userBuckets = new Map();
+    }
+    
+    check(userId, action, limits) {
+        const key = `${userId}:${action}`;
+        const bucket = this.userBuckets.get(key) || {
+            tokens: limits.maxBurst || 10,
+            lastRefill: Date.now(),
+            requests: []
+        };
+        
+        const now = Date.now();
+        const timePassed = now - bucket.lastRefill;
+        
+        // Refill tokens
+        const refillRate = limits.refillPerSecond || 1;
+        bucket.tokens = Math.min(limits.maxBurst || 10, bucket.tokens + timePassed * refillRate / 1000);
+        bucket.lastRefill = now;
+        
+        // Check if allowed
+        if (bucket.tokens < 1) {
+            return { allowed: false, retryAfter: Math.ceil(1000 / refillRate) };
+        }
+        
+        // Consume token
+        bucket.tokens -= 1;
+        bucket.requests.push(now);
+        
+        // Keep only recent requests
+        bucket.requests = bucket.requests.filter(t => t > now - 60000);
+        
+        // Check for burst pattern
+        if (bucket.requests.length > 10) {
+            return { allowed: false, reason: 'Burst detected', retryAfter: 60000 };
+        }
+        
+        this.userBuckets.set(key, bucket);
+        return { allowed: true, remaining: Math.floor(bucket.tokens) };
+    }
+}
+
+// ============== 7. Behavioral Analysis ==============
+class BehavioralAnalyzer {
+    constructor() {
+        this.userBehaviors = new Map();
+    }
+    
+    analyze(userId, action, data) {
+        const key = userId;
+        const behavior = this.userBehaviors.get(key) || {
+            actions: [],
+            mouseMovements: [],
+            keystrokes: [],
+            sessionLength: 0,
+            startTime: Date.now()
+        };
+        
+        // Record action
+        behavior.actions.push({
+            type: action,
+            timestamp: Date.now(),
+            data
         });
-        return res.status(401).json({ error: 'Invalid signature' });
-    }
-    
-    // Store nonce (expire after 5 minutes)
-    securityStore.set(nonceKey, true);
-    setTimeout(() => securityStore.delete(nonceKey), 5 * 60 * 1000);
-    
-    next();
-}
-
-// ============== 4. Anti-Bot Detection ==============
-
-function detectBot(req) {
-    const indicators = [];
-    
-    // Check User-Agent
-    const userAgent = req.headers['user-agent'] || '';
-    if (userAgent.includes('bot') || userAgent.includes('spider') || userAgent.includes('curl')) {
-        indicators.push('bot_user_agent');
-    }
-    
-    // Check for missing headers
-    if (!req.headers['user-agent'] || !req.headers['accept-language']) {
-        indicators.push('missing_headers');
-    }
-    
-    // Check for automated behavior
-    const ip = req.ip;
-    const ipKey = `ip:${ip}`;
-    let ipData = securityStore.get(ipKey) || { requests: [], firstSeen: Date.now() };
-    
-    ipData.requests.push(Date.now());
-    
-    // Keep only last 100 requests in last hour
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    ipData.requests = ipData.requests.filter(t => t > oneHourAgo);
-    
-    if (ipData.requests.length > 100) {
-        indicators.push('high_request_volume');
-    }
-    
-    securityStore.set(ipKey, ipData);
-    
-    return {
-        isBot: indicators.length > 0,
-        indicators,
-        riskScore: indicators.length * 25 // 0-100 risk score
-    };
-}
-
-// ============== 5. IP Blocking ==============
-
-const blockedIPs = new Set();
-
-function blockIP(ip, duration = 3600000) {
-    blockedIPs.add(ip);
-    setTimeout(() => blockedIPs.delete(ip), duration);
-}
-
-function isIPBlocked(req, res, next) {
-    if (blockedIPs.has(req.ip)) {
-        return res.status(403).json({ error: 'IP blocked' });
-    }
-    next();
-}
-
-// ============== 6. Logging ==============
-
-function logActivity(userId, action, details) {
-    const log = {
-        userId,
-        action,
-        details,
-        timestamp: new Date(),
-        ip: this.req?.ip
-    };
-    
-    console.log(JSON.stringify(log));
-    
-    // In production, save to database or logging service
-}
-
-function logSuspiciousActivity(userId, type, details) {
-    const log = {
-        userId,
-        type,
-        details,
-        timestamp: new Date(),
-        severity: 'high'
-    };
-    
-    console.error(JSON.stringify(log));
-    
-    // Block IP if severe
-    if (type === 'brute_force' || type === 'bot_detected') {
-        blockIP(details.ip || userId, 3600000); // 1 hour
-    }
-}
-
-// ============== 7. Sanitization ==============
-
-function sanitizeObject(obj) {
-    if (!obj) return {};
-    
-    const sanitized = {};
-    for (const [key, value] of Object.entries(obj)) {
-        if (typeof value === 'string') {
-            // Remove potential injection patterns
-            sanitized[key] = value
-                .replace(/<script/gi, '')
-                .replace(/javascript:/gi, '')
-                .replace(/on\w+=/gi, '')
-                .trim();
-        } else if (typeof value === 'object') {
-            sanitized[key] = sanitizeObject(value);
-        } else {
-            sanitized[key] = value;
+        
+        // Keep last 100 actions
+        behavior.actions = behavior.actions.slice(-100);
+        
+        // Analyze patterns
+        const analysis = {
+            isBot: false,
+            riskScore: 0,
+            reasons: []
+        };
+        
+        // Check for consistent timing (bot indicator)
+        if (behavior.actions.length > 5) {
+            const recentActions = behavior.actions.slice(-10);
+            const intervals = [];
+            for (let i = 1; i < recentActions.length; i++) {
+                intervals.push(recentActions[i].timestamp - recentActions[i-1].timestamp);
+            }
+            
+            const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+            const variance = intervals.reduce((a, b) => a + Math.pow(b - avgInterval, 2), 0) / intervals.length;
+            
+            // Low variance = likely bot
+            if (variance < 100) {
+                analysis.isBot = true;
+                analysis.riskScore += 50;
+                analysis.reasons.push('Consistent timing pattern');
+            }
         }
+        
+        // Check for too many requests
+        if (behavior.actions.length > 50) {
+            analysis.riskScore += 30;
+            analysis.reasons.push('High request volume');
+        }
+        
+        this.userBehaviors.set(key, behavior);
+        return analysis;
     }
     
-    return sanitized;
+    reset(userId) {
+        this.userBehaviors.delete(userId);
+    }
 }
+
+// Initialize global instances
+global.proofOfWork = new ProofOfWork();
+global.timeOracle = new TimeOracle();
+global.encryptedChallengeSystem = new EncryptedChallengeSystem();
+global.antiSybilSystem = new AntiSybilSystem();
+global.advancedRateLimiter = new AdvancedRateLimiter();
+global.behavioralAnalyzer = new BehavioralAnalyzer();
 
 // ============== Export ==============
-
 module.exports = {
-    generateDeviceFingerprint,
-    puzzleAttemptLimiter,
-    progressiveDelayLimiter,
-    signRequest,
-    verifyRequestSignature,
-    detectBot,
-    blockIP,
-    isIPBlocked,
-    logActivity,
-    logSuspiciousActivity,
-    sanitizeObject
+    ProofOfWork,
+    TimeOracle,
+    EncryptedChallengeSystem,
+    AntiSybilSystem,
+    AdvancedRateLimiter,
+    BehavioralAnalyzer,
+    WalletBinding: mongoose.model('WalletBinding', walletBindingSchema)
 };
