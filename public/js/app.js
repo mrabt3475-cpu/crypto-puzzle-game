@@ -34,6 +34,8 @@ class CryptoPuzzleGame {
         this.timerInterval = null;
         this.isLoggedIn = false;
         this.user = null;
+        this.teamSubscribed = false;
+        this.teamCode = null;
         
         this.init();
     }
@@ -179,6 +181,10 @@ class CryptoPuzzleGame {
     
     updateProgress() {
         document.getElementById('totalPoints').textContent = this.totalPoints;
+        document.getElementById('walletBalance').textContent = this.totalPoints.toFixed(2);
+        document.getElementById('statPoints').textContent = this.totalPoints;
+        document.getElementById('statLevels').textContent = this.currentLevel - 1;
+        document.getElementById('statTime').textContent = document.getElementById('timer').textContent;
         
         const progress = (this.currentLevel / 20) * 100;
         document.getElementById('progressFill').style.width = `${progress}%`;
@@ -190,11 +196,16 @@ class CryptoPuzzleGame {
         });
         
         document.getElementById('gameSection').style.display = page === 'game' ? 'block' : 'none';
+        document.getElementById('teamSection').style.display = page === 'team' ? 'block' : 'none';
+        document.getElementById('walletSection').style.display = page === 'wallet' ? 'block' : 'none';
+        document.getElementById('profileSection').style.display = page === 'profile' ? 'block' : 'none';
     }
     
     loadUserData() {
         if (this.user) {
             document.getElementById('balance').textContent = this.user.balance.toFixed(2);
+            document.getElementById('profileName').textContent = this.user.name;
+            document.getElementById('profileEmail').textContent = this.user.email;
         }
     }
     
@@ -221,6 +232,33 @@ class CryptoPuzzleGame {
         };
         return icons[type] || 'info-circle';
     }
+}
+
+// Team Functions
+function subscribeTeam() {
+    game.showToast('جاري إنشاء الفريق...', 'info');
+    
+    setTimeout(() => {
+        game.teamSubscribed = true;
+        game.teamCode = 'TEAM-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+        
+        document.getElementById('teamActions').style.display = 'block';
+        document.getElementById('inviteLink').value = game.teamCode;
+        
+        game.showToast('✅ تم إنشاء الفريق بنجاح! $5/شهر', 'success');
+    }, 1000);
+}
+
+function copyInviteLink() {
+    const link = document.getElementById('inviteLink');
+    link.select();
+    document.execCommand('copy');
+    game.showToast('📋 تم نسخ رابط الدعوة!', 'success');
+}
+
+function logout() {
+    localStorage.removeItem('puzzleUser');
+    location.reload();
 }
 
 const game = new CryptoPuzzleGame();

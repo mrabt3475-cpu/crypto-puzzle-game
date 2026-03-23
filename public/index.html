@@ -63,7 +63,7 @@
                         <span class="prize-amount">1000$ USDT</span>
                     </div>
                     <div class="winner-info">
-                        <span class="winner-text">🎯 الفائز الأول يحصل على الجائزة كاملة!</span>
+                        <span class="winner-text">🎯 فز بالألغاز مع صديقك!</span>
                     </div>
                 </div>
 
@@ -90,10 +90,108 @@
                     </div>
                 </div>
             </section>
+
+            <section id="teamSection" class="team-section" style="display: none;">
+                <div class="team-header">
+                    <h2>👥 العمل كفريق</h2>
+                    <p>اربح مع صديقك!</p>
+                </div>
+
+                <div class="team-plans">
+                    <div class="plan-card">
+                        <div class="plan-icon"><i class="fas fa-users"></i></div>
+                        <h3>الباقة الأساسية</h3>
+                        <div class="plan-price">$5<span>/شهر</span></div>
+                        <ul class="plan-features">
+                            <li><i class="fas fa-check"></i> فريق من شخصين</li>
+                            <li><i class="fas fa-check"></i> مشاركة النقاط</li>
+                            <li><i class="fas fa-check"></i> دردشة خاصة</li>
+                            <li><i class="fas fa-check"></i> تقدم مشترك</li>
+                        </ul>
+                        <button class="btn-primary" onclick="subscribeTeam()">اشتراك</button>
+                    </div>
+                </div>
+
+                <div class="team-actions" id="teamActions" style="display: none;">
+                    <div class="team-info-card">
+                        <h3>فريقك</h3>
+                        <div class="team-members">
+                            <div class="member-card">
+                                <div class="member-avatar"><i class="fas fa-user"></i></div>
+                                <div class="member-name" id="teamLeader">أنت</div>
+                                <div class="member-status">قائد الفريق</div>
+                            </div>
+                            <div class="member-card" id="teamMember2" style="opacity: 0.5;">
+                                <div class="member-avatar"><i class="fas fa-user-plus"></i></div>
+                                <div class="member-name">ضيف</div>
+                                <div class="member-status">في الانتظار</div>
+                            </div>
+                        </div>
+                        <div class="invite-section">
+                            <p>دعوة صديق للانضمام:</p>
+                            <div class="invite-link">
+                                <input type="text" id="inviteLink" readonly placeholder="أنشئ فريقاً للبدء">
+                                <button onclick="copyInviteLink()"><i class="fas fa-copy"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="walletSection" class="wallet-section" style="display: none;">
+                <div class="wallet-header">
+                    <h2>💰 المحفظة</h2>
+                </div>
+                <div class="wallet-balance-card">
+                    <div class="balance-label">الرصيد المتاح</div>
+                    <div class="balance-amount"><span id="walletBalance">0.00</span> USDT</div>
+                </div>
+                <div class="wallet-actions">
+                    <button class="wallet-btn"><i class="fas fa-plus"></i><span>إيداع</span></button>
+                    <button class="wallet-btn"><i class="fas fa-minus"></i><span>سحب</span></button>
+                </div>
+                <div class="transactions-list">
+                    <h3>سجل المعاملات</h3>
+                    <div class="transaction-item">
+                        <div class="tx-icon"><i class="fas fa-gamepad"></i></div>
+                        <div class="tx-details">
+                            <div class="tx-title">مكافأة اللغز</div>
+                            <div class="tx-date">اليوم</div>
+                        </div>
+                        <div class="tx-amount positive">+100</div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="profileSection" class="profile-section" style="display: none;">
+                <div class="profile-header">
+                    <div class="profile-avatar"><i class="fas fa-user"></i></div>
+                    <h2 id="profileName">المستخدم</h2>
+                    <p id="profileEmail">user@example.com</p>
+                </div>
+                <div class="profile-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="statLevels">0</div>
+                        <div class="stat-label">المستويات</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="statPoints">0</div>
+                        <div class="stat-label">النقاط</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="statTime">00:00</div>
+                        <div class="stat-label">الوقت</div>
+                    </div>
+                </div>
+                <div class="profile-actions">
+                    <button class="profile-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>تسجيل خروج</span></button>
+                </div>
+            </section>
         </main>
 
         <nav class="game-nav">
             <button class="nav-btn active" data-page="game"><i class="fas fa-gamepad"></i><span>اللعبة</span></button>
+            <button class="nav-btn" data-page="team"><i class="fas fa-users"></i><span>الفريق</span></button>
             <button class="nav-btn" data-page="wallet"><i class="fas fa-wallet"></i><span>المحفظة</span></button>
             <button class="nav-btn" data-page="profile"><i class="fas fa-user-cog"></i><span>الملف</span></button>
         </nav>
