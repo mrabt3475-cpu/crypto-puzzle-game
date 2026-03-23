@@ -26,11 +26,20 @@ const {
     deviceFingerprintMiddleware,
     auditLogMiddleware,
     geolocationCheck,
-    requestSizeValidator,
-    validateMethod,
-    InputValidator,
-    securityConfig
+    validateMethod
 } = require('./middleware/securityMiddleware');
+
+// Encryption middleware
+const {
+    encryptResponse,
+    decryptRequest,
+    generateSecureAPIKey,
+    encryptUserData,
+    decryptUserData,
+    generateUserKeyPair,
+    signData,
+    verifySignature
+} = require('./middleware/encryptionMiddleware');
 
 const app = express();
 
@@ -51,10 +60,9 @@ app.use(cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || 'http://localhost:3000',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-signature', 'x-request-timestamp', 'x-request-nonce', 'x-client-timestamp']
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-signature', 'x-request-timestamp', 'x-request-nonce', 'x-client-timestamp', 'x-api-key', 'x-signature']
 }));
 
-// Request validation
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
@@ -69,18 +77,19 @@ app.use((req, res, next) => {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     next();
 });
 
 // Advanced security middleware
-app.use(ipBlockerMiddleware);        // IP blocking
-app.use(deviceFingerprintMiddleware); // Device fingerprint
-app.use(geolocationCheck);           // Geolocation
-app.use(powLimiter);                 // Proof of Work
-app.use(behavioralCheck);            // Bot detection
-app.use(advancedRateLimit);          // Advanced rate limiting
+app.use(ipBlockerMiddleware);
+app.use(deviceFingerprintMiddleware);
+app.use(geolocationCheck);
+app.use(powLimiter);
+app.use(behavioralCheck);
+app.use(advancedRateLimit);
 
-// Audit logging for all API routes
+// Audit logging
 app.use('/api/', auditLogMiddleware('api_request'));
 
 // Honeypot
@@ -88,7 +97,7 @@ app.get('/admin.php', (req, res) => { console.log('🚨 HONEYPOT:', req.ip); res
 app.get('/wp-admin', (req, res) => { console.log('🚨 HONEYPOT:', req.ip); res.status(404).send('Not found'); });
 app.post('/.env', (req, res) => { console.log('🚨 HONEYPOT:', req.ip); res.status(404).send('Not found'); });
 
-// API Routes with validation
+// API Routes
 app.use('/api/auth', validateMethod('POST'), validateInput({
     action: { required: true, type: 'string' }
 }), authRoutes);
@@ -98,12 +107,62 @@ app.use('/api/puzzle', validateMethod('POST', 'GET'), puzzleRoutes);
 app.use('/api/zkpuzzle', validateMethod('POST', 'GET'), zkPuzzleRoutes);
 app.use('/api/metapuzzle', validateMethod('POST', 'GET'), metaPuzzleRoutes);
 
+// Encryption API endpoints
+app.post('/api/encryption/generate-keypair', (req, res) => {
+    try {
+        const keyPair = generateUserKeyPair();
+        res.json({ success: true, publicKey: keyPair.publicKey });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to generate key pair' });
+    }
+});
+
+app.post('/api/encryption/sign', (req, res) => {
+    try {
+        const { data, privateKey } = req.body;
+        if (!data || !privateKey) {
+            return res.status(400).json({ error: 'Missing data or privateKey' });
+        }
+        const signature = signData(JSON.stringify(data), privateKey);
+        res.json({ success: true, signature });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to sign data' });
+    }
+});
+
+app.post('/api/encryption/verify', (req, res) => {
+    try {
+        const { data, signature, publicKey } = req.body;
+        if (!data || !signature || !publicKey) {
+            return res.status(400).json({ error: 'Missing parameters' });
+        }
+        const isValid = verifySignature(JSON.stringify(data), signature, publicKey);
+        res.json({ success: true, valid: isValid });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to verify signature' });
+    }
+});
+
+app.post('/api/encryption/generate-api-key', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        if (!userId) {
+            return res.status(400).json({ error: 'Missing userId' });
+        }
+        const result = await generateSecureAPIKey(userId);
+        res.json({ success: true, apiKey: result.apiKey });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to generate API key' });
+    }
+});
+
 // Health check
 app.get('/health', (req, res) => res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     security: 'complete',
-    version: '2.0'
+    encryption: 'enabled',
+    version: '3.0'
 }));
 
 // 404
@@ -112,17 +171,6 @@ app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // Error handler
 app.use((err, req, res, next) => {
     console.error('Error:', err);
-    
-    // Log error to audit
-    if (global.auditLogger) {
-        global.auditLogger.log({
-            action: 'error',
-            userId: req.user?.userId,
-            ipAddress: req.ip,
-            metadata: { error: err.message, stack: err.stack }
-        });
-    }
-    
     res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal error' : err.message });
 });
 
@@ -132,17 +180,11 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/puzzle
 mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true, maxPoolSize: 10 }).then(async () => {
     console.log('✅ MongoDB Connected');
     
-    // Initialize security models
-    try {
-        const { default: security } = require('./middleware/securityComplete');
-        // Models are auto-registered
-    } catch(e) {}
-    
     // Initialize puzzles
     try { const ZKPuzzle = require('./models/ZKPuzzle'); await ZKPuzzle.initializePuzzles(); } catch(e) {}
     try { const MetaPuzzle = require('./models/MetaPuzzle'); await MetaPuzzle.initializePuzzles(); } catch(e) {}
     
-    app.listen(PORT, () => console.log('🚀 MRABT: The Lost Block - Complete Security - Port', PORT));
+    app.listen(PORT, () => console.log('🚀 MRABT: The Lost Block - Full Encryption - Port', PORT));
 }).catch(e => { console.error(e); process.exit(1); });
 
 module.exports = app;
