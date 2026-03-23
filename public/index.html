@@ -97,18 +97,18 @@
                     <p>اربح مع صديقك!</p>
                 </div>
 
-                <div class="team-plans">
+                <div class="team-plans" id="teamPlans">
                     <div class="plan-card">
                         <div class="plan-icon"><i class="fas fa-users"></i></div>
-                        <h3>الباقة الأساسية</h3>
+                        <h3>فريق ثنائي</h3>
                         <div class="plan-price">$5<span>/شهر</span></div>
                         <ul class="plan-features">
                             <li><i class="fas fa-check"></i> فريق من شخصين</li>
                             <li><i class="fas fa-check"></i> مشاركة النقاط</li>
-                            <li><i class="fas fa-check"></i> دردشة خاصة</li>
                             <li><i class="fas fa-check"></i> تقدم مشترك</li>
+                            <li><i class="fas fa-check"></i> ربح ضعف الجائزة!</li>
                         </ul>
-                        <button class="btn-primary" onclick="subscribeTeam()">اشتراك</button>
+                        <button class="btn-primary" onclick="createTeam()">إنشاء فريق - $5</button>
                     </div>
                 </div>
 
@@ -121,17 +121,28 @@
                                 <div class="member-name" id="teamLeader">أنت</div>
                                 <div class="member-status">قائد الفريق</div>
                             </div>
-                            <div class="member-card" id="teamMember2" style="opacity: 0.5;">
+                            <div class="member-card" id="member2Card">
                                 <div class="member-avatar"><i class="fas fa-user-plus"></i></div>
-                                <div class="member-name">ضيف</div>
-                                <div class="member-status">في الانتظار</div>
+                                <div class="member-name" id="member2Name">ضيف جديد</div>
+                                <div class="member-status" id="member2Status">اضغط لإضافة</div>
                             </div>
                         </div>
+                        <div class="add-member-section" id="addMemberSection">
+                            <p>إضافة عضو جديد للفريق:</p>
+                            <div class="member-price">
+                                <i class="fas fa-coins"></i>
+                                <span>تكلفة إضافة العضو: <strong>$5</strong></span>
+                            </div>
+                            <button class="btn-primary" onclick="addTeamMember()">
+                                <i class="fas fa-user-plus"></i>
+                                <span>إضافة عضو - $5</span>
+                            </button>
+                        </div>
                         <div class="invite-section">
-                            <p>دعوة صديق للانضمام:</p>
+                            <p>أو شارك هذا الكود مع صديقك:</p>
                             <div class="invite-link">
-                                <input type="text" id="inviteLink" readonly placeholder="أنشئ فريقاً للبدء">
-                                <button onclick="copyInviteLink()"><i class="fas fa-copy"></i></button>
+                                <input type="text" id="teamCode" readonly>
+                                <button onclick="copyTeamCode()"><i class="fas fa-copy"></i></button>
                             </div>
                         </div>
                     </div>

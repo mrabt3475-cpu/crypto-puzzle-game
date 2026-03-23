@@ -34,8 +34,9 @@ class CryptoPuzzleGame {
         this.timerInterval = null;
         this.isLoggedIn = false;
         this.user = null;
-        this.teamSubscribed = false;
+        this.hasTeam = false;
         this.teamCode = null;
+        this.teamMember2 = null;
         
         this.init();
     }
@@ -140,14 +141,16 @@ class CryptoPuzzleGame {
         const isCorrect = puzzle.answer.some(a => a.toLowerCase() === answer);
         
         if (isCorrect) {
-            this.totalPoints += 100;
+            const points = this.hasTeam ? 200 : 100;
+            this.totalPoints += points;
             this.currentLevel++;
             this.attempts = 3;
             
-            this.showToast('✅ إجابة صحيحة! +100 نقطة', 'success');
+            this.showToast(`✅ إجابة صحيحة! +${points} نقطة`, 'success');
             
             if (this.currentLevel > 20) {
-                this.showToast('🎉 تهانينا! فزت بالجائزة الكبرى! 1000$ USDT', 'success');
+                const prize = this.hasTeam ? 2000 : 1000;
+                this.showToast(`🎉 تهانينا! فزت بالجائزة الكبرى! ${prize}$ USDT`, 'success');
             } else {
                 this.loadPuzzle();
             }
@@ -235,25 +238,41 @@ class CryptoPuzzleGame {
 }
 
 // Team Functions
-function subscribeTeam() {
-    game.showToast('جاري إنشاء الفريق...', 'info');
+function createTeam() {
+    game.showToast('جاري إنشاء الفريق مقابل $5...', 'info');
     
     setTimeout(() => {
-        game.teamSubscribed = true;
+        game.hasTeam = true;
         game.teamCode = 'TEAM-' + Math.random().toString(36).substr(2, 6).toUpperCase();
         
+        document.getElementById('teamPlans').style.display = 'none';
         document.getElementById('teamActions').style.display = 'block';
-        document.getElementById('inviteLink').value = game.teamCode;
+        document.getElementById('teamCode').value = game.teamCode;
         
         game.showToast('✅ تم إنشاء الفريق بنجاح! $5/شهر', 'success');
     }, 1000);
 }
 
-function copyInviteLink() {
-    const link = document.getElementById('inviteLink');
-    link.select();
+function addTeamMember() {
+    game.showToast('جاري إضافة العضو مقابل $5...', 'info');
+    
+    setTimeout(() => {
+        game.teamMember2 = 'صديق';
+        
+        document.getElementById('member2Name').textContent = game.teamMember2;
+        document.getElementById('member2Status').textContent = 'عضو نشط';
+        document.getElementById('member2Card').style.opacity = '1';
+        document.getElementById('addMemberSection').style.display = 'none';
+        
+        game.showToast('✅ تم إضافة العضو للفريق! +200 نقطة لكل لغز', 'success');
+    }, 1000);
+}
+
+function copyTeamCode() {
+    const code = document.getElementById('teamCode');
+    code.select();
     document.execCommand('copy');
-    game.showToast('📋 تم نسخ رابط الدعوة!', 'success');
+    game.showToast('📋 تم نسخ كود الفريق!', 'success');
 }
 
 function logout() {
