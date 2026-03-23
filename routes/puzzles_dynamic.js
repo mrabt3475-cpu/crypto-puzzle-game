@@ -1,5 +1,5 @@
 /**
- * Puzzle Routes - Dynamic 30-Level Puzzle Game with Security
+ * Puzzle Routes - Dynamic 30-Level Puzzle Game with Payment Integration
  */
 
 const express = require('express');
@@ -10,12 +10,13 @@ const {
   validateInput, 
   checkAntiCheat, 
   generateSecureToken, 
-  generateUserHash,
   securityLog 
 } = require('../middleware/securityAdvanced');
+const { Payment, requiresPayment, getLevelPrice } = require('../models/Payment');
 
 const router = express.Router();
 const users = new Map();
+const paymentSystem = new Payment();
 
 // START NEW GAME
 router.post('/start', rateLimiter, (req, res) => {
@@ -63,7 +64,7 @@ router.post('/start', rateLimiter, (req, res) => {
   }
 });
 
-// GET CURRENT QUESTION
+// GET CURRENT QUESTION (with payment check)
 router.get('/question/:level', rateLimiter, (req, res) => {
   try {
     const { level } = req.params;
@@ -86,6 +87,23 @@ router.get('/question/:level', rateLimiter, (req, res) => {
     if (user.sessionToken !== sessionToken) {
       securityLog('invalid_token', { userId, level: levelNum });
       return res.status(401).json({ error: 'Invalid session token' });
+    }
+    
+    // Check if level requires payment
+    if (requiresPayment(levelNum)) {
+      const isPaid = paymentSystem.isLevelPaid(userId, levelNum);
+      if (!isPaid) {
+        const pricing = getLevelPrice(levelNum);
+        return res.status(402).json({
+          error: 'Payment required',
+          level: levelNum,
+          price: pricing.price,
+          currency: pricing.currency,
+          message: `المستوى ${levelNum} يتطلب دفع ${pricing.price} USDT`,
+          paymentRequired: true,
+          paymentEndpoint: '/api/payment/create'
+        });
+      }
     }
     
     if (levelNum > user.currentLevel) {
@@ -151,6 +169,20 @@ router.post('/answer', rateLimiter, (req, res) => {
       return res.status(401).json({ error: 'Invalid session token' });
     }
     
+    // Check payment for paid levels
+    if (requiresPayment(levelNum)) {
+      const isPaid = paymentSystem.isLevelPaid(userId, levelNum);
+      if (!isPaid) {
+        const pricing = getLevelPrice(levelNum);
+        return res.status(402).json({
+          error: 'Payment required',
+          level: levelNum,
+          price: pricing.price,
+          currency: pricing.currency
+        });
+      }
+    }
+    
     if (levelNum !== user.currentLevel) {
       return res.status(400).json({ 
         error: 'Invalid level order',
@@ -168,8 +200,7 @@ router.post('/answer', rateLimiter, (req, res) => {
         success: false,
         correct: false,
         message: validation.message || 'إجابة خاطئة',
-        hint: questionData.hint,
-        attemptsRemaining: 5 - (user.history[levelNum]?.attempts || 0)
+        hint: questionData.hint
       });
     }
     
@@ -234,6 +265,19 @@ router.get('/progress', (req, res) => {
     if (user.sessionToken !== sessionToken) {
       return res.status(401).json({ error: 'Invalid session token' });
     }
+    
+    // Get paid levels
+    const paidLevels = [];
+    for (let i = 1; i <= TOTAL_LEVELS; i++) {
+      if (requiresPayment(i)) {
+        paidLevels.push({
+          level: i,
+          paid: paymentSystem.isLevelPaid(userId, i),
+          price: getLevelPrice(i).price
+        });
+      }
+    }
+    
     res.json({
       success: true,
       userId: user.userId,
@@ -243,7 +287,8 @@ router.get('/progress', (req, res) => {
       completedLevels: Object.keys(user.history).length,
       isCompleted: !!user.completedAt,
       startedAt: user.startedAt,
-      completedAt: user.completedAt
+      completedAt: user.completedAt,
+      paidLevels
     });
   } catch (error) {
     console.error('Get progress error:', error);
@@ -277,7 +322,13 @@ router.get('/hint/:level', (req, res) => {
 
 // HEALTH CHECK
 router.get('/health', (req, res) => {
-  res.json({ status: 'ok', game: 'Crypto Puzzle Game', version: '2.0', levels: TOTAL_LEVELS, activeUsers: users.size });
+  res.json({ 
+    status: 'ok', 
+    game: 'Crypto Puzzle Game', 
+    version: '2.0', 
+    levels: TOTAL_LEVELS, 
+    activeUsers: users.size 
+  });
 });
 
 module.exports = router;
